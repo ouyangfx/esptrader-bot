@@ -320,19 +320,25 @@ class TradingEngine:
         # =========================================================
         if self.engine_mode == "SEARCHING":
             self.current_status_message = f"[{time_str}] Escaneando {len(self.selected_pairs)} pares en simultáneo ({self.seconds_left_in_candle}s restantes)"
-            
+            current_minute_slot = current_int_sec // self.timeframe
+
             for pair in self.selected_pairs:
                 p_state = self.pairs_state.get(pair)
                 if not p_state:
                     continue
 
-                candles = self.iq.get_candles(pair, self.timeframe, 60)
+                # Evitar consultas redundantes de velas en el mismo minuto si ya fue analizado
+                if p_state.get("analyzed_minute_slot") == current_minute_slot:
+                    continue
+
+                candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 60)
                 if not candles or len(candles) < 10:
                     continue
 
                 closed_candle = candles[-2]
                 closed_candle_time = closed_candle.get('from', 0)
 
+                p_state["analyzed_minute_slot"] = current_minute_slot
                 # Si la vela cerró recientemente
                 if closed_candle_time != p_state["last_analyzed_time"]:
                     p_state["last_analyzed_time"] = closed_candle_time
@@ -377,7 +383,7 @@ class TradingEngine:
 
             # En el último segundo de la vela (<= 1s para segundo 00)
             if self.seconds_left_in_candle <= 1:
-                candles = self.iq.get_candles(pair, self.timeframe, 10)
+                candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 10)
                 if candles and len(candles) >= 2:
                     confirm_candle = candles[-1]
                     c_open = confirm_candle['open']
@@ -402,7 +408,7 @@ class TradingEngine:
                         trade_amount = self.current_amount
 
                         logger.info(f"¡Vela confirmada! Ejecutando {direction} en {pair} a las {entry_time_str}")
-                        ok, order_id, msg = self.iq.buy_option(pair, trade_amount, direction, self.expiration)
+                        ok, order_id, msg = await asyncio.to_thread(self.iq.buy_option, pair, trade_amount, direction, self.expiration)
 
                         if ok:
                             self.current_trade = {
@@ -460,10 +466,10 @@ class TradingEngine:
                 await asyncio.sleep(1.5)
 
                 order_id = cur_trade["id"]
-                result, profit, _, _ = self.iq.check_result(order_id)
+                result, profit, _, _ = await asyncio.to_thread(self.iq.check_result, order_id)
                 close_time_str = datetime.fromtimestamp(self.iq.get_server_timestamp()).strftime("%H:%M:%S")
 
-                fresh_candles = self.iq.get_candles(pair, 60, 5)
+                fresh_candles = await asyncio.to_thread(self.iq.get_candles, pair, 60, 5)
                 close_price = fresh_candles[-1]['close'] if fresh_candles else self.current_tick_price
                 entry_price = cur_trade["entry_price"]
 

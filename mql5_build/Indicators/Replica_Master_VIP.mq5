@@ -68,9 +68,9 @@ int OnInit()
    // Validar Licencia
    if(!ValidateLicense())
    {
-      Alert("❌ LICENCIA INVÁLIDA O EXPIRADA. Contacta a @ouyangfx para activar tu acceso.");
-      DrawHUD("❌ LICENCIA DENEGADA", clrRed, 0.0, "Contacta al Administrador");
-      return(INIT_FAILED);
+      Print("Replica Master VIP: Esperando autenticación del EA OTC_Feed_Bridge...");
+      DrawHUD("⚠️ ESPERANDO EA BRIDGE", clrYellow, 0.0, "Inicia OTC_Feed_Bridge");
+      return(INIT_SUCCEEDED);
    }
 
    DrawHUD("🟢 LICENCIA VIP ACTIVA", clrSpringGreen, 0.0, "Buscando Réplicas M30...");
@@ -103,15 +103,16 @@ int OnCalculate(const int rates_total,
 {
    if(rates_total < 50) return(0);
 
-   // Verificar licencia periódicamente
-   if(TimeCurrent() - g_last_check > 1200)
+   // Verificar licencia periódicamente o si aún no estaba validada
+   if(!g_license_valid || (TimeCurrent() - g_last_check > 300))
    {
       if(!ValidateLicense())
       {
-         DrawHUD("❌ LICENCIA REVOCADA", clrRed, 0.0, "Contacta a Soporte");
+         DrawHUD("⚠️ ESPERANDO EA BRIDGE", clrYellow, 0.0, "Inicia OTC_Feed_Bridge");
          return(0);
       }
       g_last_check = TimeCurrent();
+      DrawHUD("🟢 LICENCIA VIP ACTIVA", clrSpringGreen, 0.0, "Buscando Réplicas M30...");
    }
 
    // 1. Obtener Velas de M30 para el análisis fractal
@@ -292,30 +293,48 @@ void TriggerAlert(string dir, string sym, double sim)
 }
 
 //+------------------------------------------------------------------+
-//| Valida la Licencia mediante WebRequest                           |
+//| Valida la Licencia consultando el EA Bridge o archivo compartido |
 //+------------------------------------------------------------------+
 bool ValidateLicense()
 {
-   string url = InpServerUrl + "/api/mt5/license/validate?license_key=" + InpLicenseKey + "&account=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
-   char post_data[];
-   char result[];
-   string result_headers;
+   long my_account = AccountInfoInteger(ACCOUNT_LOGIN);
 
-   int res = WebRequest("GET", url, "", 4000, post_data, result, result_headers);
-   if(res == -1) return false;
-
-   string response = CharArrayToString(result);
-   if(StringFind(response, "\"valid\":true") >= 0 || StringFind(response, "\"success\":true") >= 0)
+   // 1. Revisar Variable Global en memoria activada por OTC_Feed_Bridge
+   if(GlobalVariableCheck("OTC_VIP_LICENSE_ACTIVE"))
    {
-      g_license_valid = true;
-      int namePos = StringFind(response, "\"client_name\":\"");
-      if(namePos >= 0)
+      double active = GlobalVariableGet("OTC_VIP_LICENSE_ACTIVE");
+      double acc = GlobalVariableGet("OTC_VIP_LICENSE_ACCOUNT");
+      if(active == 1.0 && (long)acc == my_account)
       {
-         int endPos = StringFind(response, "\"", namePos + 15);
-         if(endPos > namePos)
-            g_client_name = StringSubstr(response, namePos + 15, endPos - (namePos + 15));
+         g_license_valid = true;
+         if(g_client_name == "") g_client_name = "Trader VIP (Admin Master)";
+         return true;
       }
-      return true;
+   }
+
+   // 2. Revisar Archivo Compartido en FILE_COMMON
+   int f = FileOpen("otc_vip_license.txt", FILE_READ | FILE_TXT | FILE_COMMON);
+   if(f != INVALID_HANDLE)
+   {
+      string line = FileReadString(f);
+      FileClose(f);
+
+      string parts[];
+      int n = StringSplit(line, '|', parts);
+      if(n >= 3)
+      {
+         long file_acc = StringToInteger(parts[0]);
+         string file_key = parts[1];
+         string file_client = parts[2];
+         long file_exp = (n >= 4) ? StringToInteger(parts[3]) : 0;
+
+         if(file_acc == my_account && (file_key == InpLicenseKey || file_key != "") && (file_exp == 0 || TimeCurrent() < (datetime)file_exp))
+         {
+            g_license_valid = true;
+            g_client_name = file_client;
+            return true;
+         }
+      }
    }
 
    g_license_valid = false;

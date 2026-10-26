@@ -40,7 +40,6 @@ int OnInit()
    // 1. Validar Licencia con el Servidor VPS
    if(!ValidateLicense())
    {
-      Alert("❌ LICENCIA INVÁLIDA O EXPIRADA. Contacta a @ouyangfx para activar tu clave.");
       DrawHUD("❌ LICENCIA DENEGADA", clrRed, "Contacta al Administrador");
       return(INIT_FAILED);
    }
@@ -91,7 +90,7 @@ void OnTimer()
 }
 
 //+------------------------------------------------------------------+
-//| Valida la Licencia mediante WebRequest                           |
+//| Valida la Licencia mediante WebRequest con reintentos            |
 //+------------------------------------------------------------------+
 bool ValidateLicense()
 {
@@ -99,19 +98,44 @@ bool ValidateLicense()
    char post_data[];
    char result[];
    string result_headers;
+   string headers = "User-Agent: MT5-Bridge/2026\r\nContent-Type: application/json\r\n";
 
-   ResetLastError();
-   int res = WebRequest("GET", url, "", 5000, post_data, result, result_headers);
+   int max_retries = 3;
+   int last_err = 0;
+   int http_code = 0;
 
-   if(res == -1)
+   for(int attempt = 1; attempt <= max_retries; attempt++)
    {
-      Print("Error en WebRequest: ", GetLastError());
-      Print("Asegúrate de agregar '", InpServerUrl, "' en: Herramientas -> Opciones -> Asesores Expertos -> Permitir WebRequest.");
+      ResetLastError();
+      http_code = WebRequest("GET", url, headers, 12000, post_data, result, result_headers);
+      last_err = GetLastError();
+
+      if(http_code == 200)
+         break;
+
+      if(attempt < max_retries)
+      {
+         PrintFormat("Intento %d de validación falló (HTTP: %d, Err: %d). Reintentando en 1.5s...", attempt, http_code, last_err);
+         Sleep(1500);
+      }
+   }
+
+   if(http_code == -1)
+   {
+      Print("Error en WebRequest: ", last_err);
+      if(last_err == 4060)
+      {
+         Alert("⚠️ ERROR MT5 (Código 4060): La URL '" + InpServerUrl + "' no está permitida para WebRequest.\nPor favor ve en MT5 a: Herramientas -> Opciones -> Asesores Expertos y agrega '" + InpServerUrl + "' a la lista.");
+      }
+      else
+      {
+         Alert("⚠️ Error de conexión con el VPS (Código " + IntegerToString(last_err) + "). Verifica tu conexión a internet o el estado del VPS.");
+      }
       return false;
    }
 
    string response = CharArrayToString(result);
-   if(StringFind(response, "\"valid\":true") >= 0 || StringFind(response, "\"success\":true") >= 0)
+   if(http_code == 200 && (StringFind(response, "\"valid\":true") >= 0 || StringFind(response, "\"success\":true") >= 0))
    {
       g_license_valid = true;
       // Extraer nombre de cliente si existe
@@ -122,10 +146,27 @@ bool ValidateLicense()
          if(endPos > namePos)
             g_client_name = StringSubstr(response, namePos + 15, endPos - (namePos + 15));
       }
+      
+      // Registrar variables globales para que los indicadores las lean al instante
+      long my_acc = AccountInfoInteger(ACCOUNT_LOGIN);
+      GlobalVariableSet("OTC_VIP_LICENSE_ACTIVE", 1.0);
+      GlobalVariableSet("OTC_VIP_LICENSE_ACCOUNT", (double)my_acc);
+      GlobalVariableSet("OTC_VIP_LICENSE_TS", (double)TimeCurrent());
+
+      // Guardar token en archivo compartido FILE_COMMON
+      int f = FileOpen("otc_vip_license.txt", FILE_WRITE | FILE_TXT | FILE_COMMON);
+      if(f != INVALID_HANDLE)
+      {
+         FileWriteString(f, IntegerToString(my_acc) + "|" + InpLicenseKey + "|" + g_client_name + "|" + IntegerToString((long)(TimeCurrent() + 86400 * 30)));
+         FileClose(f);
+      }
+
+      Print("Licencia validada exitosamente para: ", g_client_name, " (Cuenta MT5: ", my_acc, ")");
       return true;
    }
 
    g_license_valid = false;
+   Alert("❌ LICENCIA INVÁLIDA O EXPIRADA. La clave '" + InpLicenseKey + "' no está autorizada para la cuenta " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".\nContacta al Administrador @ouyangfx.");
    return false;
 }
 

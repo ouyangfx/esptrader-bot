@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Admin | Trader 4 Less Bot</title>
+  <link rel="icon" type="image/svg+xml" href="/static/assets/images/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="dashboard-body">
+  <!-- Top Navigation -->
+  <header class="dash-navbar">
+    <div class="nav-brand">
+      <img src="/static/assets/images/logo.svg" alt="Trader 4 Less" class="dash-logo">
+      <span class="badge-vip">SCRIPT VIP BOT</span>
+    </div>
+
+    <div class="nav-center">
+      <div class="clock-box">
+        <i class="fa-regular fa-clock"></i>
+        <span id="server-clock">--:--:--</span>
+      </div>
+      <div class="telegram-pill">
+        <i class="fa-brands fa-telegram"></i>
+        <a href="https://t.me/traderfxapp" target="_blank">@traderfxapp</a>
+      </div>
+    </div>
+
+    <div class="nav-user">
+      <div class="account-badge" id="account-pill">
+        <span class="account-mode" id="account-mode-text">PRACTICE</span>
+        <span class="account-balance" id="account-balance-text">$0.00</span>
+      </div>
+      <a href="/logout" class="btn-logout" title="Cerrar Sesión">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      </a>
+    </div>
+  </header>
+
+  <div class="dash-container">
+    <!-- HERO BAR: BOT POWER SWITCH & STATUS -->
+    <section class="bot-control-hero glow-panel">
+      <div class="hero-status">
+        <div class="status-indicator">
+          <span class="pulse-ring" id="status-ring"></span>
+          <span class="status-dot-core" id="status-dot"></span>
+        </div>
+        <div class="status-meta">
+          <span class="status-title" id="status-title">BOT EN ESPERA</span>
+          <p class="status-subtitle" id="status-desc">Inicia el bot para comenzar el escaneo y trading automático</p>
+        </div>
+      </div>
+
+      <div class="hero-actions">
+        <button id="btn-toggle-bot" class="btn-power btn-start glow-button">
+          <i class="fa-solid fa-play"></i> <span id="btn-power-text">ENCENDER BOT</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SECOND-BY-SECOND LIVE RADAR WIDGET -->
+    <section class="radar-card glow-panel">
+      <div class="card-header">
+        <div class="header-title">
+          <i class="fa-solid fa-satellite-dish fa-spin-pulse"></i>
+          <h3>Radar en Vivo Segundo a Segundo</h3>
+        </div>
+        <div class="pair-tag" id="radar-pair-tag">EURUSD • 1M</div>
+      </div>
+
+      <div class="radar-grid">
+        <!-- Live Tick Price -->
+        <div class="radar-box">
+          <span class="radar-label">PRECIO TICK ACTUAL</span>
+          <span class="radar-val price-val" id="radar-price">0.00000</span>
+          <span class="radar-sub" id="radar-tick-time">Actualizado cada segundo</span>
+        </div>
+
+        <!-- Seconds Left in Current Candle -->
+        <div class="radar-box">
+          <span class="radar-label">CIERRE DE VELA EN</span>
+          <div class="countdown-wrapper">
+            <span class="radar-val countdown-val" id="radar-countdown">00s</span>
+            <div class="countdown-progress-bar">
+              <div class="progress-fill" id="countdown-progress" style="width: 100%;"></div>
+            </div>
+          </div>
+          <span class="radar-sub" id="radar-candle-type">Timeframe Activo</span>
+        </div>
+
+        <!-- Current Cycle State -->
+        <div class="radar-box cycle-box">
+          <span class="radar-label">CICLO DE ESTRATEGIA VIP</span>
+          <div class="cycle-steps">
+            <div class="c-step active" id="step-search">
+              <span class="step-num">1</span>
+              <span class="step-txt">Búsqueda</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="c-step" id="step-confirm">
+              <span class="step-num">2</span>
+              <span class="step-txt">Confirmando</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="c-step" id="step-trade">
+              <span class="step-num">3</span>
+              <span class="step-txt">Operación 1M</span>
+            </div>
+          </div>
+          <div class="cycle-status-msg" id="cycle-msg">Buscando cruce del Oscilador VIP...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- METRICS ROW -->
+    <section class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-icon win-icon"><i class="fa-solid fa-trophy"></i></div>
+        <div class="metric-content">
+          <span class="m-label">WIN RATE</span>
+          <span class="m-val" id="metric-winrate">0.0%</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon profit-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+        <div class="metric-content">
+          <span class="m-label">GANANCIA NETA</span>
+          <span class="m-val" id="metric-profit">$0.00</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon itm-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="metric-content">
+          <span class="m-label">OPERACIONES ITM</span>
+          <span class="m-val" id="metric-wins">0</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon otm-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+        <div class="metric-content">
+          <span class="m-label">OPERACIONES OTM</span>
+          <span class="m-val" id="metric-losses">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN TWO COLUMNS: CONFIGURATION & OPERATION HISTORY -->
+    <div class="main-two-col">
+      <!-- CONFIGURATION PANEL -->
+      <section class="card config-card glow-panel">
+        <div class="card-header">
+          <div class="header-title">
+            <i class="fa-solid fa-gears"></i>
+            <h3>Configuración del Sistema</h3>
+          </div>
+        </div>
+
+        <form id="form-config" class="config-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cfg-pair"><i class="fa-solid fa-coins"></i> Par de Divisas</label>
+              <select id="cfg-pair" name="pair" class="form-select">
+                <option value="EURUSD">EUR/USD</option>
+                <option value="GBPUSD">GBP/USD</option>
+                <option value="USDJPY">USD/JPY</option>
+                <option value="EURJPY">EUR/JPY</option>
+                <option value="AUDUSD">AUD/USD</option>
+                <option value="USDCAD">USD/CAD</option>
+                <option value="EURUSD-OTC">EUR/USD (OTC)</option>
+                <option value="GBPUSD-OTC">GBP/USD (OTC)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-timeframe"><i class="fa-solid fa-chart-simple"></i> Timeframe Análisis</label>
+              <select id="cfg-timeframe" name="timeframe" class="form-select">
+                <option value="60">1 Minuto (M1)</option>
+                <option value="300">5 Minutos (M5)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cfg-amount"><i class="fa-solid fa-dollar-sign"></i> Importe Base ($)</label>
+              <input type="number" id="cfg-amount" name="amount" min="1" step="0.5" value="2.0" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-martingale"><i class="fa-solid fa-calculator"></i> Pasos Martingala</label>
+              <select id="cfg-martingale" name="martingale" class="form-select">
+                <option value="0">0 (Sin Martingala)</option>
+                <option value="1" selected>1 Paso (Recomendado)</option>
+                <option value="2">2 Pasos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cfg-account"><i class="fa-solid fa-wallet"></i> Tipo de Cuenta IQ Option</label>
+              <select id="cfg-account" name="account_type" class="form-select">
+                <option value="PRACTICE">Cuenta Demo (PRACTICE)</option>
+                <option value="REAL">Cuenta Real (REAL)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="config-divider">
+            <span>Credenciales IQ Option</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cfg-email"><i class="fa-solid fa-envelope"></i> Email IQ Option</label>
+              <input type="email" id="cfg-email" name="iq_email" placeholder="usuario@gmail.com" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-pass"><i class="fa-solid fa-lock"></i> Contraseña IQ Option</label>
+              <input type="password" id="cfg-pass" name="iq_pass" placeholder="••••••••••••" class="form-input">
+            </div>
+          </div>
+
+          <button type="submit" class="btn-save glow-button">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar y Aplicar Cambios
+          </button>
+        </form>
+      </section>
+
+      <!-- LIVE OPERATION HISTORY TABLE -->
+      <section class="card history-card glow-panel">
+        <div class="card-header">
+          <div class="header-title">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <h3>Historial de Operaciones en Vivo</h3>
+          </div>
+          <span class="table-count" id="table-count">0 operaciones</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table-trades">
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Par</th>
+                <th>Tipo</th>
+                <th>Importe</th>
+                <th>Apertura</th>
+                <th>Cierre</th>
+                <th>Resultado</th>
+                <th>Ganancia</th>
+              </tr>
+            </thead>
+            <tbody id="trades-body">
+              <tr class="empty-row">
+                <td colspan="8">Esperando la primera operación del bot...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- CONSOLE LOG TERMINAL -->
+    <section class="card terminal-card glow-panel">
+      <div class="card-header">
+        <div class="header-title">
+          <i class="fa-solid fa-terminal"></i>
+          <h3>Consola de Sistema & Telegram Logs</h3>
+        </div>
+        <button id="btn-clear-logs" class="btn-clear"><i class="fa-solid fa-eraser"></i> Limpiar</button>
+      </div>
+      <div class="terminal-body" id="terminal-logs">
+        <div class="term-line info">[SISTEMA] Conectado a ESPTrader VIP Engine...</div>
+        <div class="term-line info">[TELEGRAM] Canal configurado: @traderfxapp | Admin: @ouyangfx</div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

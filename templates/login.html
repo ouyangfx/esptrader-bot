@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso Admin | Trader 4 Less Bot</title>
+  <link rel="icon" type="image/svg+xml" href="/static/assets/images/favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="login-body">
+  <div class="stars-bg"></div>
+
+  <div class="login-container">
+    <div class="login-card glow-border">
+      <div class="login-header">
+        <a href="/" class="back-home"><i class="fa-solid fa-arrow-left"></i> Volver al Portal</a>
+        <div class="logo-box">
+          <img src="/static/assets/images/logo.svg" alt="Trader 4 Less" class="login-logo">
+        </div>
+        <h2>Panel de Control Admin</h2>
+        <p>Introduce tus credenciales para administrar el bot IQ Option</p>
+      </div>
+
+      {% if error %}
+      <div class="alert-box alert-error">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form action="/login" method="POST" class="login-form">
+        <div class="input-group">
+          <label for="username"><i class="fa-solid fa-user"></i> Usuario</label>
+          <input type="text" id="username" name="username" placeholder="Usuario administrador" required autofocus>
+        </div>
+
+        <div class="input-group">
+          <label for="password"><i class="fa-solid fa-key"></i> Contraseña</label>
+          <input type="password" id="password" name="password" placeholder="••••••••••••" required>
+        </div>
+
+        <button type="submit" class="btn-submit glow-button">
+          <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesión
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <span>Seguridad Trader 4 Less • Encriptación de Sesión</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

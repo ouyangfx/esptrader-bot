@@ -35,7 +35,11 @@ class IQOptionClient:
             }
 
         try:
-            from iqoptionapi.stable_api import IQ_Option
+            try:
+                from iqoptionapi.stable_api import IQ_Option
+            except ImportError:
+                from iqoptionapi.api import IQOptionAPI as IQ_Option
+            
             api = IQ_Option(email.strip(), password.strip())
             check, reason = api.connect()
 

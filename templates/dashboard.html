@@ -49,7 +49,7 @@
         </div>
         <div class="status-meta">
           <span class="status-title" id="status-title">BOT EN ESPERA</span>
-          <p class="status-subtitle" id="status-desc">Inicia el bot para comenzar el escaneo y trading automático</p>
+          <p class="status-subtitle" id="status-desc">Selecciona los pares a analizar y enciende el bot para iniciar el escaneo automático</p>
         </div>
       </div>
 
@@ -60,14 +60,150 @@
       </div>
     </section>
 
+    <!-- IQ OPTION CONNECTION & TEST BOX -->
+    <section class="card glow-panel iq-connect-card">
+      <div class="card-header">
+        <div class="header-title">
+          <i class="fa-solid fa-plug-circle-check"></i>
+          <h3>Login IQ Option & Prueba de Conexión</h3>
+        </div>
+        <span class="status-badge-iq" id="iq-status-badge">
+          <i class="fa-solid fa-circle-notch fa-spin"></i> Verificando conexión...
+        </span>
+      </div>
+
+      <div class="iq-connect-body">
+        <div class="iq-form-row">
+          <div class="iq-form-group">
+            <label><i class="fa-solid fa-envelope"></i> Email IQ Option</label>
+            <input type="email" id="test-iq-email" placeholder="tu_correo@gmail.com" class="form-input" value="{{ engine.iq.email }}">
+          </div>
+
+          <div class="iq-form-group">
+            <label><i class="fa-solid fa-lock"></i> Contraseña IQ Option</label>
+            <input type="password" id="test-iq-pass" placeholder="••••••••••••" class="form-input" value="{{ engine.iq.password }}">
+          </div>
+
+          <div class="iq-form-group">
+            <label><i class="fa-solid fa-wallet"></i> Tipo de Saldo</label>
+            <select id="test-iq-account" class="form-select">
+              <option value="PRACTICE" {% if engine.iq.account_type == 'PRACTICE' %}selected{% endif %}>Cuenta Demo (PRACTICE)</option>
+              <option value="REAL" {% if engine.iq.account_type == 'REAL' %}selected{% endif %}>Cuenta Real (REAL)</option>
+            </select>
+          </div>
+
+          <div class="iq-form-group-btn">
+            <button type="button" id="btn-test-iq" class="btn-test-iq glow-button">
+              <i class="fa-solid fa-network-wired"></i> <span id="btn-test-iq-text">Probar Conexión</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="iq-test-result" class="iq-test-result" style="display: none;"></div>
+      </div>
+    </section>
+
+    <!-- SELECCIÓN DE PARES SIMULTÁNEOS (10 NORMALES + 10 OTC) -->
+    <section class="card glow-panel pairs-selection-card">
+      <div class="card-header">
+        <div class="header-title">
+          <i class="fa-solid fa-layer-group"></i>
+          <h3>Pares a Analizar en Simultáneo</h3>
+          <span class="pairs-count-badge" id="selected-count-badge">
+            <span id="selected-count">0</span> de 20 Seleccionados
+          </span>
+        </div>
+
+        <div class="pairs-quick-actions">
+          <button type="button" class="btn-quick-pair" id="btn-select-normal">
+            <i class="fa-solid fa-chart-line"></i> 10 Normales
+          </button>
+          <button type="button" class="btn-quick-pair" id="btn-select-otc">
+            <i class="fa-solid fa-moon"></i> 10 OTC
+          </button>
+          <button type="button" class="btn-quick-pair" id="btn-select-all">
+            <i class="fa-solid fa-check-double"></i> Todos (20)
+          </button>
+          <button type="button" class="btn-quick-pair btn-clear-pairs" id="btn-deselect-all">
+            <i class="fa-solid fa-xmark"></i> Deseleccionar
+          </button>
+        </div>
+      </div>
+
+      <div class="pairs-grid-container">
+        <!-- MERCADO NORMAL (10 PARES) -->
+        <div class="pairs-market-column">
+          <div class="market-section-title">
+            <i class="fa-solid fa-sun icon-market-normal"></i> Mercado Normal (10 Pares)
+          </div>
+          <div class="pairs-checkboxes-grid">
+            {% set normal_pairs = [
+              ('EURUSD', 'EUR / USD'),
+              ('GBPUSD', 'GBP / USD'),
+              ('USDJPY', 'USD / JPY'),
+              ('EURJPY', 'EUR / JPY'),
+              ('AUDUSD', 'AUD / USD'),
+              ('USDCAD', 'USD / CAD'),
+              ('USDCHF', 'USD / CHF'),
+              ('EURGBP', 'EUR / GBP'),
+              ('NZDUSD', 'NZD / USD'),
+              ('GBPJPY', 'GBP / JPY')
+            ] %}
+            {% for symbol, label in normal_pairs %}
+            <label class="pair-checkbox-card" data-symbol="{{ symbol }}">
+              <input type="checkbox" name="trading_pairs" value="{{ symbol }}" class="chk-pair" {% if symbol in engine.selected_pairs %}checked{% endif %}>
+              <div class="pair-card-content">
+                <span class="pair-symbol">{{ symbol }}</span>
+                <span class="pair-sublabel">{{ label }}</span>
+              </div>
+              <span class="pair-check-icon"><i class="fa-solid fa-check"></i></span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- MERCADO OTC (10 PARES) -->
+        <div class="pairs-market-column">
+          <div class="market-section-title">
+            <i class="fa-solid fa-moon icon-market-otc"></i> Mercado OTC (10 Pares)
+          </div>
+          <div class="pairs-checkboxes-grid">
+            {% set otc_pairs = [
+              ('EURUSD-OTC', 'EUR / USD (OTC)'),
+              ('GBPUSD-OTC', 'GBP / USD (OTC)'),
+              ('USDJPY-OTC', 'USD / JPY (OTC)'),
+              ('EURJPY-OTC', 'EUR / JPY (OTC)'),
+              ('AUDUSD-OTC', 'AUD / USD (OTC)'),
+              ('USDCAD-OTC', 'USD / CAD (OTC)'),
+              ('USDCHF-OTC', 'USD / CHF (OTC)'),
+              ('NZDUSD-OTC', 'NZD / USD (OTC)'),
+              ('EURGBP-OTC', 'EUR / GBP (OTC)'),
+              ('GBPJPY-OTC', 'GBP / JPY (OTC)')
+            ] %}
+            {% for symbol, label in otc_pairs %}
+            <label class="pair-checkbox-card pair-otc" data-symbol="{{ symbol }}">
+              <input type="checkbox" name="trading_pairs" value="{{ symbol }}" class="chk-pair" {% if symbol in engine.selected_pairs %}checked{% endif %}>
+              <div class="pair-card-content">
+                <span class="pair-symbol">{{ symbol }}</span>
+                <span class="pair-sublabel">{{ label }}</span>
+              </div>
+              <span class="badge-otc-pill">OTC</span>
+              <span class="pair-check-icon"><i class="fa-solid fa-check"></i></span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- SECOND-BY-SECOND LIVE RADAR WIDGET -->
     <section class="radar-card glow-panel">
       <div class="card-header">
         <div class="header-title">
           <i class="fa-solid fa-satellite-dish fa-spin-pulse"></i>
-          <h3>Radar en Vivo Segundo a Segundo</h3>
+          <h3>Radar Principal en Vivo Segundo a Segundo</h3>
         </div>
-        <div class="pair-tag" id="radar-pair-tag">EURUSD • 1M</div>
+        <div class="pair-tag" id="radar-pair-tag">{{ engine.active_pair }} • 1M</div>
       </div>
 
       <div class="radar-grid">
@@ -114,6 +250,20 @@
       </div>
     </section>
 
+    <!-- LIVE MULTI-PAIR RADAR GRID (TODOS LOS PARES SELECCIONADOS EN TIEMPO REAL) -->
+    <section class="card glow-panel multi-radar-section">
+      <div class="card-header">
+        <div class="header-title">
+          <i class="fa-solid fa-table-cells"></i>
+          <h3>Monitor Multi-Par en Paralelo</h3>
+          <span class="header-hint">(Haz clic en cualquier par para enfocarlo en el radar principal)</span>
+        </div>
+      </div>
+      <div class="multi-pairs-grid" id="multi-pairs-grid">
+        <!-- Se genera dinámicamente vía WebSocket/JS -->
+      </div>
+    </section>
+
     <!-- METRICS ROW -->
     <section class="metrics-row">
       <div class="metric-card">
@@ -156,26 +306,12 @@
         <div class="card-header">
           <div class="header-title">
             <i class="fa-solid fa-gears"></i>
-            <h3>Configuración del Sistema</h3>
+            <h3>Parámetros de Entrada & Riesgo</h3>
           </div>
         </div>
 
         <form id="form-config" class="config-form">
           <div class="form-row">
-            <div class="form-group">
-              <label for="cfg-pair"><i class="fa-solid fa-coins"></i> Par de Divisas</label>
-              <select id="cfg-pair" name="pair" class="form-select">
-                <option value="EURUSD">EUR/USD</option>
-                <option value="GBPUSD">GBP/USD</option>
-                <option value="USDJPY">USD/JPY</option>
-                <option value="EURJPY">EUR/JPY</option>
-                <option value="AUDUSD">AUD/USD</option>
-                <option value="USDCAD">USD/CAD</option>
-                <option value="EURUSD-OTC">EUR/USD (OTC)</option>
-                <option value="GBPUSD-OTC">GBP/USD (OTC)</option>
-              </select>
-            </div>
-
             <div class="form-group">
               <label for="cfg-timeframe"><i class="fa-solid fa-chart-simple"></i> Timeframe Análisis</label>
               <select id="cfg-timeframe" name="timeframe" class="form-select">
@@ -183,14 +319,14 @@
                 <option value="300">5 Minutos (M5)</option>
               </select>
             </div>
-          </div>
 
-          <div class="form-row">
             <div class="form-group">
               <label for="cfg-amount"><i class="fa-solid fa-dollar-sign"></i> Importe Base ($)</label>
               <input type="number" id="cfg-amount" name="amount" min="1" step="0.5" value="2.0" class="form-input">
             </div>
+          </div>
 
+          <div class="form-row">
             <div class="form-group">
               <label for="cfg-martingale"><i class="fa-solid fa-calculator"></i> Pasos Martingala</label>
               <select id="cfg-martingale" name="martingale" class="form-select">
@@ -199,9 +335,7 @@
                 <option value="2">2 Pasos</option>
               </select>
             </div>
-          </div>
 
-          <div class="form-row">
             <div class="form-group">
               <label for="cfg-account"><i class="fa-solid fa-wallet"></i> Tipo de Cuenta IQ Option</label>
               <select id="cfg-account" name="account_type" class="form-select">
@@ -211,24 +345,8 @@
             </div>
           </div>
 
-          <div class="config-divider">
-            <span>Credenciales IQ Option</span>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="cfg-email"><i class="fa-solid fa-envelope"></i> Email IQ Option</label>
-              <input type="email" id="cfg-email" name="iq_email" placeholder="usuario@gmail.com" class="form-input">
-            </div>
-
-            <div class="form-group">
-              <label for="cfg-pass"><i class="fa-solid fa-lock"></i> Contraseña IQ Option</label>
-              <input type="password" id="cfg-pass" name="iq_pass" placeholder="••••••••••••" class="form-input">
-            </div>
-          </div>
-
           <button type="submit" class="btn-save glow-button">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar y Aplicar Cambios
+            <i class="fa-solid fa-floppy-disk"></i> Guardar y Aplicar Parámetros
           </button>
         </form>
       </section>

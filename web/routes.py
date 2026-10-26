@@ -1,14 +1,18 @@
 """
 Rutas Web y API con FastAPI
-Incluye Portal Linktree, Autenticación de Admin, Panel de Control y WebSocket en vivo.
+Incluye Portal Linktree, Autenticación de Admin, Panel de Control,
+Prueba de Conexión IQ Option, Selección Multi-Par y WebSocket en vivo.
 """
 
 from fastapi import APIRouter, Request, Response, Form, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import secrets
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -16,8 +20,20 @@ templates = Jinja2Templates(directory="templates")
 # Sesiones en memoria activas
 active_sessions = set()
 
-class ConfigUpdateModel(BaseModel):
+class IqTestModel(BaseModel):
+    email: str
+    password: str
+    account_type: str = "PRACTICE"
+
+class PairsUpdateModel(BaseModel):
+    pairs: List[str]
+
+class SetFocusPairModel(BaseModel):
     pair: str
+
+class ConfigUpdateModel(BaseModel):
+    pairs: Optional[List[str]] = None
+    pair: Optional[str] = "EURUSD"
     timeframe: int
     amount: float
     martingale: int
@@ -106,20 +122,49 @@ async def api_stop_bot(request: Request):
     success, msg = engine.stop()
     return {"success": success, "message": msg}
 
+@router.post("/api/iq/test-connection")
+async def api_test_iq_connection(data: IqTestModel, request: Request):
+    """Prueba la conexión a IQ Option con las credenciales ingresadas."""
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    engine = request.app.state.engine
+    result = engine.iq.test_connection(data.email, data.password, data.account_type)
+    return result
+
+@router.post("/api/pairs/update")
+async def api_update_pairs(data: PairsUpdateModel, request: Request):
+    """Actualiza la lista de pares que se analizarán en simultáneo."""
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    engine = request.app.state.engine
+    success, msg = engine.set_selected_pairs(data.pairs)
+    return {"success": success, "message": msg, "selected_pairs": engine.selected_pairs}
+
+@router.post("/api/pairs/focus")
+async def api_focus_pair(data: SetFocusPairModel, request: Request):
+    """Enfoca el radar principal en un par específico."""
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    engine = request.app.state.engine
+    engine.set_active_pair(data.pair)
+    return {"success": True, "active_pair": engine.active_pair}
+
 @router.post("/api/config")
 async def api_update_config(data: ConfigUpdateModel, request: Request):
     if not is_authenticated(request):
         raise HTTPException(status_code=401, detail="No autorizado")
     
     engine = request.app.state.engine
+    
     # Actualizar credenciales si se proveyeron
     if data.iq_email and data.iq_email.strip() and data.iq_pass and data.iq_pass.strip():
         engine.iq.email = data.iq_email.strip()
         engine.iq.password = data.iq_pass.strip()
         engine.iq.connect()
     
+    pairs_list = data.pairs if data.pairs else ([data.pair] if data.pair else engine.selected_pairs)
     engine.update_config(
-        pair=data.pair,
+        pairs=pairs_list,
         timeframe=data.timeframe,
         amount=data.amount,
         martingale=data.martingale,

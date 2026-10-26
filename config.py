@@ -9,8 +9,18 @@ class Config:
     IQ_PASSWORD = os.getenv("IQ_PASSWORD", "")
     IQ_ACCOUNT_TYPE = os.getenv("IQ_ACCOUNT_TYPE", "PRACTICE").upper()
 
-    # Bot Trading Parameters
-    _pairs_raw = os.getenv("TRADING_PAIRS", "EURUSD,GBPUSD,USDJPY,EURJPY")
+    # Bot Trading Parameters - 10 Normal + 10 OTC Pairs
+    NORMAL_PAIRS = [
+        "EURUSD", "GBPUSD", "USDJPY", "EURJPY", "AUDUSD",
+        "USDCAD", "USDCHF", "EURGBP", "NZDUSD", "GBPJPY"
+    ]
+    OTC_PAIRS = [
+        "EURUSD-OTC", "GBPUSD-OTC", "USDJPY-OTC", "EURJPY-OTC", "AUDUSD-OTC",
+        "USDCAD-OTC", "USDCHF-OTC", "NZDUSD-OTC", "EURGBP-OTC", "GBPJPY-OTC"
+    ]
+    ALL_AVAILABLE_PAIRS = NORMAL_PAIRS + OTC_PAIRS
+
+    _pairs_raw = os.getenv("TRADING_PAIRS", "EURUSD,GBPUSD,USDJPY,EURJPY,EURUSD-OTC,GBPUSD-OTC")
     TRADING_PAIRS = [p.strip().upper() for p in _pairs_raw.split(",") if p.strip()]
     TIMEFRAME = int(os.getenv("TIMEFRAME", "60"))  # 60s (1m) or 300s (5m)
     EXPIRATION_TIME = int(os.getenv("EXPIRATION_TIME", "1"))  # 1 min

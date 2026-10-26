@@ -9,7 +9,7 @@ import time
 import logging
 import random
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,61 @@ class IQOptionClient:
         self.is_connected = False
         self.is_simulation = False
         self.mock_balance = 10000.0 if self.account_type == "PRACTICE" else 100.0
+
+    def test_connection(self, email: str, password: str, account_type: str = "PRACTICE") -> Dict[str, Any]:
+        """Prueba credenciales y conexión directa a IQ Option sin alterar el bot."""
+        if not email or not password or "tu_correo" in email:
+            return {
+                "success": False,
+                "message": "Por favor ingresa un email y contraseña válidos de IQ Option.",
+                "balance": 0.0,
+                "account_type": account_type.upper(),
+                "is_simulation": True
+            }
+
+        try:
+            from iqoptionapi.stable_api import IQ_Option
+            api = IQ_Option(email.strip(), password.strip())
+            check, reason = api.connect()
+
+            if check:
+                self.api = api
+                self.email = email.strip()
+                self.password = password.strip()
+                self.account_type = account_type.upper()
+                self.is_connected = True
+                self.is_simulation = False
+                
+                # Sincronizar tipo de cuenta y saldo
+                self.change_balance(self.account_type)
+                balance = self.get_balance()
+                msg = f"Conexión exitosa a IQ Option ({self.account_type}). Saldo real verificado: ${balance:,.2f}"
+                logger.info(msg)
+                return {
+                    "success": True,
+                    "message": msg,
+                    "balance": balance,
+                    "account_type": self.account_type,
+                    "is_simulation": False
+                }
+            else:
+                logger.warning(f"Fallo de conexión en test IQ Option: {reason}")
+                return {
+                    "success": False,
+                    "message": f"No se pudo conectar a IQ Option: {reason}. Verifica tus credenciales.",
+                    "balance": 0.0,
+                    "account_type": account_type.upper(),
+                    "is_simulation": True
+                }
+        except Exception as e:
+            logger.error(f"Excepción en test_connection: {e}")
+            return {
+                "success": False,
+                "message": f"Error al inicializar conexión con IQ Option API: {str(e)}",
+                "balance": 0.0,
+                "account_type": account_type.upper(),
+                "is_simulation": True
+            }
 
     def connect(self) -> Tuple[bool, str]:
         """Intenta conectar a IQ Option con las credenciales provistas."""
@@ -181,23 +236,40 @@ class IQOptionClient:
         # Alinear a inicio de vela
         now_aligned = now - (now % timeframe)
         candles = []
-        base_price = 1.0850 if "EUR" in active else 1.2500
+        
+        pair_clean = active.upper().replace("-OTC", "")
+        base_prices = {
+            "EURUSD": 1.08500,
+            "GBPUSD": 1.26500,
+            "USDJPY": 154.500,
+            "EURJPY": 167.200,
+            "AUDUSD": 0.65500,
+            "USDCAD": 1.38500,
+            "USDCHF": 0.90200,
+            "EURGBP": 0.85800,
+            "NZDUSD": 0.59800,
+            "GBPJPY": 195.400
+        }
+        base_price = base_prices.get(pair_clean, 1.08500)
+        spread_scale = 0.05 if "JPY" in pair_clean else 0.0003
         
         for i in range(count):
             t_from = now_aligned - ((count - i) * timeframe)
             t_to = t_from + timeframe
-            delta = (random.random() - 0.49) * 0.0006
+            delta = (random.random() - 0.49) * (spread_scale * 2)
             close_p = base_price + delta
-            high_p = max(base_price, close_p) + random.random() * 0.0003
-            low_p = min(base_price, close_p) - random.random() * 0.0003
+            high_p = max(base_price, close_p) + (random.random() * spread_scale)
+            low_p = min(base_price, close_p) - (random.random() * spread_scale)
+            
+            decimals = 3 if "JPY" in pair_clean else 5
             candles.append({
                 'id': i,
                 'from': t_from,
                 'to': t_to,
-                'open': round(base_price, 5),
-                'close': round(close_p, 5),
-                'min': round(low_p, 5),
-                'max': round(high_p, 5),
+                'open': round(base_price, decimals),
+                'close': round(close_p, decimals),
+                'min': round(low_p, decimals),
+                'max': round(high_p, decimals),
                 'volume': random.randint(10, 100)
             })
             base_price = close_p

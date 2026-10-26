@@ -48,3 +48,8 @@ data/*.sqlite3
 *.swo
 
 vps_*.py
+cp_cookies.txt
+apply_cpanel_*.py
+install_cpanel.py
+
+install_cpanel.py

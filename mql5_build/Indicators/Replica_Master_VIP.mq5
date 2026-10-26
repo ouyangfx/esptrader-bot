@@ -119,7 +119,7 @@ int OnCalculate(const int rates_total,
    MqlRates ratesM30[];
    ArraySetAsSeries(ratesM30, true);
    int copiedM30 = CopyRates(_Symbol, PERIOD_M30, 0, InpLookbackM30, ratesM30);
-   if(copiedM30 < 10) return(rates_total);
+   if(copiedM30 < 4) return(rates_total);
 
    // 2. Extraer propiedades de la vela M30 actual (Índice 0 o 1)
    MqlRates currentM30 = ratesM30[0];
@@ -134,7 +134,7 @@ int OnCalculate(const int rates_total,
    int expectedResolution = 0; // +1 = CALL, -1 = PUT
 
    // 3. Escanear Historial de M30 buscando la Réplica más parecida
-   for(int i = 3; i < copiedM30 - 2; i++)
+   for(int i = 2; i < copiedM30 - 1; i++)
    {
       MqlRates pastCandle = ratesM30[i];
       MqlRates pastPrev   = ratesM30[i + 1];

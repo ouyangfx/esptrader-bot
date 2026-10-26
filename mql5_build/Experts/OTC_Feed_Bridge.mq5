@@ -47,10 +47,32 @@ int OnInit()
    // 2. Crear los 10 Símbolos Personalizados OTC si no existen
    CreateCustomOTCSymbols();
 
-   // 3. Inicializar Timer de alta frecuencia
+   // 3. Descargar e inyectar historial de velas M1 para eliminar pantalla negra
+   Print("Descargando e inyectando historial de velas M1...");
+   string curSym = _Symbol;
+   if(StringFind(curSym, "_OTC") >= 0)
+   {
+      SeedHistoryCandles(curSym);
+   }
+   for(int i = 0; i < 10; i++)
+   {
+      if(OTC_PAIRS[i] != curSym)
+         SeedHistoryCandles(OTC_PAIRS[i]);
+   }
+
+   // 4. Configurar el gráfico para mostrar velas completas con colores institucionales
+   ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
+   ChartSetInteger(0, CHART_AUTOSCROLL, true);
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, C'0, 230, 118');
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, C'255, 23, 68');
+   ChartSetInteger(0, CHART_COLOR_CHART_UP, C'0, 230, 118');
+   ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'255, 23, 68');
+   ChartRedraw(0);
+
+   // 5. Inicializar Timer de alta frecuencia
    EventSetMillisecondTimer(InpTimerMs);
 
-   // 4. Dibujar Panel Informativo
+   // 6. Dibujar Panel Informativo
    DrawHUD("🟢 CONECTADO AL VPS", clrSpringGreen, "10 Pares OTC en Streaming");
 
    Print("OTC Feed Bridge iniciado con éxito. Licencia activa para: ", g_client_name);
@@ -204,7 +226,78 @@ void CreateCustomOTCSymbols()
 }
 
 //+------------------------------------------------------------------+
-//| Obtiene los Ticks y Velas desde el VPS e inyecta en MT5          |
+//| Descarga velas históricas M1 e inyecta en el Símbolo Custom      |
+//+------------------------------------------------------------------+
+void SeedHistoryCandles(string sym)
+{
+   string url = InpServerUrl + "/api/mt5/feed/history?license_key=" + InpLicenseKey + "&symbol=" + sym + "&count=150";
+   char post_data[];
+   char result[];
+   string result_headers;
+   string headers = "User-Agent: MT5-Bridge/2026\r\n";
+
+   int res = WebRequest("GET", url, headers, 10000, post_data, result, result_headers);
+   if(res != 200)
+   {
+      PrintFormat("Aviso: No se pudo obtener historial para %s (HTTP: %d)", sym, res);
+      return;
+   }
+
+   string json = CharArrayToString(result);
+   int cPos = StringFind(json, "\"candles\":[");
+   if(cPos < 0) return;
+
+   int endArr = StringFind(json, "]", cPos);
+   if(endArr < 0) return;
+
+   string arrStr = StringSubstr(json, cPos, endArr - cPos + 1);
+
+   MqlRates rates[];
+   ArrayResize(rates, 200);
+   int ratesCount = 0;
+   int curIdx = 0;
+
+   while(ratesCount < 200)
+   {
+      int objStart = StringFind(arrStr, "{", curIdx);
+      if(objStart < 0) break;
+      int objEnd = StringFind(arrStr, "}", objStart);
+      if(objEnd < 0) break;
+
+      string obj = StringSubstr(arrStr, objStart, objEnd - objStart + 1);
+
+      datetime c_time = (datetime)ExtractDoubleValue(obj, 0, "\"time\":");
+      double c_open   = ExtractDoubleValue(obj, 0, "\"open\":");
+      double c_high   = ExtractDoubleValue(obj, 0, "\"high\":");
+      double c_low    = ExtractDoubleValue(obj, 0, "\"low\":");
+      double c_close  = ExtractDoubleValue(obj, 0, "\"close\":");
+      long   c_vol    = (long)ExtractDoubleValue(obj, 0, "\"vol\":");
+
+      if(c_time > 0 && c_open > 0)
+      {
+         rates[ratesCount].time = c_time;
+         rates[ratesCount].open = c_open;
+         rates[ratesCount].high = c_high;
+         rates[ratesCount].low  = c_low;
+         rates[ratesCount].close = c_close;
+         rates[ratesCount].tick_volume = (c_vol > 0) ? c_vol : 20;
+         rates[ratesCount].spread = 10;
+         rates[ratesCount].real_volume = 0;
+         ratesCount++;
+      }
+      curIdx = objEnd + 1;
+   }
+
+   if(ratesCount > 0)
+   {
+      ArrayResize(rates, ratesCount);
+      int updated = CustomRatesUpdate(sym, rates, ratesCount);
+      Print("✅ ", sym, ": ", updated, " velas M1 inyectadas con éxito.");
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Obtiene los Ticks y actualiza velas en vivo en tiempo real        |
 //+------------------------------------------------------------------+
 void FetchAndFeedOTCData()
 {
@@ -217,7 +310,9 @@ void FetchAndFeedOTCData()
    if(res != 200) return;
 
    string response = CharArrayToString(result);
-   
+   datetime global_server_ts = (datetime)ExtractDoubleValue(response, 0, "\"timestamp\":");
+   if(global_server_ts == 0) global_server_ts = TimeCurrent();
+
    // Inyectar datos en cada uno de los 10 pares OTC
    for(int i = 0; i < 10; i++)
    {
@@ -225,15 +320,16 @@ void FetchAndFeedOTCData()
       int symPos = StringFind(response, "\"" + sym + "\"");
       if(symPos < 0) continue;
 
-      // Extraer bid y ask
+      // Extraer bid, ask y last
       double bid = ExtractDoubleValue(response, symPos, "\"bid\":");
       double ask = ExtractDoubleValue(response, symPos, "\"ask\":");
       double last = ExtractDoubleValue(response, symPos, "\"last\":");
 
       if(bid > 0)
       {
+         // 1. Inyectar Tick en Market Watch
          MqlTick ticks[1];
-         ticks[0].time = TimeCurrent();
+         ticks[0].time = global_server_ts;
          ticks[0].bid = bid;
          ticks[0].ask = ask > 0 ? ask : bid;
          ticks[0].last = last > 0 ? last : bid;
@@ -242,16 +338,40 @@ void FetchAndFeedOTCData()
 
          CustomTicksAdd(sym, ticks, 1);
          g_ticks_count++;
-      }
 
-      // Inyectar velas M1 si están en el payload
-      InjectCandlesFromJSON(response, symPos, sym);
+         // 2. Actualizar o formar la vela M1 actual en vivo en el gráfico
+         datetime bar_ts = global_server_ts - (global_server_ts % 60);
+         MqlRates live_rate[1];
+         live_rate[0].time = bar_ts;
+         live_rate[0].open = last;
+         live_rate[0].high = last;
+         live_rate[0].low  = last;
+         live_rate[0].close = last;
+         live_rate[0].tick_volume = 1;
+         live_rate[0].spread = 10;
+         live_rate[0].real_volume = 0;
+
+         MqlRates last_bar[1];
+         if(CopyRates(sym, PERIOD_M1, 0, 1, last_bar) > 0)
+         {
+            if(last_bar[0].time == bar_ts)
+            {
+               live_rate[0].open = last_bar[0].open;
+               live_rate[0].high = MathMax(last_bar[0].high, last);
+               live_rate[0].low  = MathMin(last_bar[0].low, last);
+               live_rate[0].tick_volume = last_bar[0].tick_volume + 1;
+            }
+         }
+
+         CustomRatesUpdate(sym, live_rate, 1);
+      }
    }
 
-   // Actualizar HUD cada 50 ticks
+   // Actualizar HUD periódicamente
    if(g_ticks_count % 30 == 0)
    {
       DrawHUD("🟢 EN STREAMING ACTIVO", clrSpringGreen, "Ticks recibidos: " + IntegerToString(g_ticks_count));
+      ChartRedraw(0);
    }
 }
 

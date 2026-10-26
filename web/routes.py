@@ -339,6 +339,42 @@ async def api_mt5_otc_feed(request: Request, license_key: str, symbol: Optional[
         "data": feed_data
     }
 
+@router.get("/api/mt5/feed/history")
+async def api_mt5_feed_history(request: Request, license_key: str, symbol: str = "EURUSD_OTC", count: int = 150):
+    """
+    Entrega velas históricas M1 para poblar el gráfico en MetaTrader 5 y eliminar la pantalla negra.
+    """
+    lic_mgr = request.app.state.license_manager
+    client_ip = request.client.host if request.client else ""
+    valid, msg, lic_data = lic_mgr.validate_license(license_key, "", client_ip)
+    if not valid:
+        return JSONResponse(status_code=403, content={"success": False, "error": msg})
+
+    iq = request.app.state.iq_client
+    inv_map = {v: k for k, v in OTC_SYMBOLS_MAP.items()}
+    iq_pair = inv_map.get(symbol.upper(), "EURUSD-OTC")
+
+    candle_count = min(max(count, 30), 300)
+    m1_raw = await asyncio.to_thread(iq.get_candles, iq_pair, 60, candle_count)
+
+    candles_list = []
+    for c in m1_raw:
+        candles_list.append({
+            "time": int(c["from"]),
+            "open": round(float(c["open"]), 5 if "JPY" not in iq_pair else 3),
+            "high": round(float(c["max"]), 5 if "JPY" not in iq_pair else 3),
+            "low": round(float(c["min"]), 5 if "JPY" not in iq_pair else 3),
+            "close": round(float(c["close"]), 5 if "JPY" not in iq_pair else 3),
+            "vol": int(c.get("volume", 30))
+        })
+
+    return {
+        "success": True,
+        "symbol": symbol.upper(),
+        "count": len(candles_list),
+        "candles": candles_list
+    }
+
 # =========================================================
 # ADMINISTRACIÓN DE LICENCIAS (PANEL WEB ADMIN)
 # =========================================================

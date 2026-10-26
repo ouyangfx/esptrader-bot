@@ -37,12 +37,13 @@ class TradingEngine:
         self.selected_pairs: List[str] = list(self.config.TRADING_PAIRS) if self.config.TRADING_PAIRS else ["EURUSD", "GBPUSD", "USDJPY", "EURJPY"]
         self.active_pair: str = self.selected_pairs[0] if self.selected_pairs else "EURUSD"
         
-        self.timeframe = self.config.TIMEFRAME
-        self.expiration = self.config.EXPIRATION_TIME
+        # Configuración estricta en Velas de 5 Minutos (M5) y Sin Martingala
+        self.timeframe = 300  # 300 segundos = 5 minutos
+        self.expiration = 5   # Expiración 5 minutos
         self.base_amount = self.config.TRADE_AMOUNT
         self.current_amount = self.config.TRADE_AMOUNT
-        self.martingale_steps = self.config.MARTINGALE_STEPS
-        self.martingale_multiplier = self.config.MARTINGALE_MULTIPLIER
+        self.martingale_steps = 0  # No existe martingala
+        self.martingale_multiplier = 1.0
         self.current_martingale_step = 0
         
         # MÁQUINA DE ESTADOS GLOBAL SECUENCIAL (UNA SEÑAL A LA VEZ)
@@ -365,8 +366,8 @@ class TradingEngine:
                             "confirm_candle_from": candles[-1].get('from', 0)
                         }
 
-                        tf_label = "1M" if self.timeframe == 60 else f"{self.timeframe//60}M"
-                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando confirmación (Otros pares en pausa)..."
+                        tf_label = "5M"
+                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando confirmación M5 (Otros pares en pausa)..."
                         logger.info(f"Señal VIP detectada: {pair} {direction}. Bloqueando escaneo en {pair} hasta resultado.")
                         
                         self.telegram.notify_pre_signal(pair, direction, tf_label, candle_dt_str)
@@ -426,7 +427,7 @@ class TradingEngine:
                                 "end_ts": server_ts + (self.expiration * 60)
                             }
                             self.engine_mode = "IN_TRADE"
-                            self.current_status_message = f"OPERACIÓN EN CURSO: {pair} {direction} ${trade_amount} (Expiración 1M)"
+                            self.current_status_message = f"OPERACIÓN EN CURSO (5M): {pair} {direction} ${trade_amount} (Expiración 5 Minutos)"
                             
                             self.telegram.notify_entry(
                                 pair=pair,
@@ -472,7 +473,7 @@ class TradingEngine:
                 result, profit, _, _ = await asyncio.to_thread(self.iq.check_result, order_id)
                 close_time_str = datetime.fromtimestamp(self.iq.get_server_timestamp()).strftime("%H:%M:%S")
 
-                fresh_candles = await asyncio.to_thread(self.iq.get_candles, pair, 60, 5)
+                fresh_candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 5)
                 close_price = fresh_candles[-1]['close'] if fresh_candles else self.current_tick_price
                 entry_price = cur_trade["entry_price"]
 
@@ -486,15 +487,13 @@ class TradingEngine:
                     lost_amount = cur_trade["amount"]
                     self.session_stats["net_profit"] -= lost_amount
                     profit = -lost_amount
-
-                    if self.current_martingale_step < self.martingale_steps:
-                        self.current_martingale_step += 1
-                        self.current_amount = round(self.current_amount * self.martingale_multiplier, 2)
-                    else:
-                        self.current_amount = self.base_amount
-                        self.current_martingale_step = 0
+                    # Operativa fija: NO existe martingala, siempre monto base
+                    self.current_amount = self.base_amount
+                    self.current_martingale_step = 0
                 else:
                     self.session_stats["equals"] += 1
+                    self.current_amount = self.base_amount
+                    self.current_martingale_step = 0
 
                 self.session_stats["total_trades"] += 1
                 tot = self.session_stats["wins"] + self.session_stats["losses"]
@@ -512,7 +511,7 @@ class TradingEngine:
                     "entry_price": entry_price,
                     "close_price": close_price,
                     "amount": cur_trade["amount"],
-                    "martingale_step": self.current_martingale_step
+                    "martingale_step": 0
                 }
                 self.trade_history.append(trade_record)
                 self.db.save_trade(trade_record)
@@ -536,16 +535,17 @@ class TradingEngine:
                 self.locked_pair = None
                 self.pending_signal = None
                 self.current_trade = None
-                self.current_status_message = f"Operación finalizada ({result}). Reanudando análisis simultáneo de todos los pares..."
+                self.current_status_message = f"Operación finalizada ({result}). Reanudando análisis simultáneo de todos los pares en M5..."
 
     def update_config(self, pairs: List[str], timeframe: int, amount: float, martingale: int, account_type: str):
         if pairs:
             self.set_selected_pairs(pairs)
-        self.timeframe = int(timeframe)
+        self.timeframe = 300
+        self.expiration = 5
         self.base_amount = float(amount)
-        if self.current_martingale_step == 0:
-            self.current_amount = self.base_amount
-        self.martingale_steps = int(martingale)
+        self.current_amount = self.base_amount
+        self.martingale_steps = 0
+        self.martingale_multiplier = 1.0
         if account_type.upper() != self.iq.account_type:
             self.iq.change_balance(account_type.upper())
-        logger.info(f"Configuración actualizada: Pares={len(self.selected_pairs)}, TF={self.timeframe}s, Monto=${self.base_amount}, Martingala={self.martingale_steps}, Cuenta={self.iq.account_type}")
+        logger.info(f"Configuración actualizada: Pares={len(self.selected_pairs)}, TF=300s (5M), Monto=${self.base_amount}, Sin Martingala, Cuenta={self.iq.account_type}")

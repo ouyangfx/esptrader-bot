@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let ws = null;
   let previousPrices = {};
   let previousMainPrice = 0.0;
-  let currentActiveTimeframe = 60;
+  let currentActiveTimeframe = 300; // Velas estrictamente de 5 Minutos (M5)
 
   // Actualizar reloj local
   setInterval(() => {
@@ -394,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (data.seconds_left !== undefined) {
       radarCountdownEl.textContent = `${data.seconds_left}s`;
-      const tf = currentActiveTimeframe || 60;
+      const tf = currentActiveTimeframe || 300;
       const pct = Math.max(0, Math.min(100, (data.seconds_left / tf) * 100));
       countdownProgressEl.style.width = `${pct}%`;
     }
@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.status_message && isBotRunning) {
       statusDescEl.textContent = data.status_message;
     }
-    currentActiveTimeframe = data.timeframe || 60;
+    currentActiveTimeframe = data.timeframe || 300;
 
     // Cuenta y Saldo
     accountModeEl.textContent = data.account_type || "PRACTICE";
@@ -464,8 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
     accountBalanceEl.textContent = `$${(data.balance || 0).toFixed(2)}`;
 
     // Radar Principal
-    const tfLabel = data.timeframe === 60 ? "1M" : `${Math.floor(data.timeframe / 60)}M`;
-    radarPairEl.textContent = `${data.pair} • ${tfLabel}`;
+    radarPairEl.textContent = `${data.pair} • 5M`;
 
     // Pasos del ciclo
     stepSearch.classList.remove('active');
@@ -474,17 +473,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (data.state === 'SEARCHING') {
       stepSearch.classList.add('active');
-      cycleMsgEl.textContent = "Buscando cruce del Oscilador VIP en pares seleccionados...";
+      cycleMsgEl.textContent = "Buscando cruce del Oscilador VIP en velas M5...";
       cycleMsgEl.style.color = "#8e9bb0";
     } else if (data.state === 'CONFIRMING') {
       stepConfirm.classList.add('active');
       const sig = data.pending_signal ? data.pending_signal.direction : '';
-      cycleMsgEl.textContent = `¡SEÑAL ${sig} EN ${data.pair}! Evaluando vela de confirmación...`;
+      cycleMsgEl.textContent = `¡SEÑAL ${sig} EN ${data.pair}! Evaluando vela M5 de confirmación...`;
       cycleMsgEl.style.color = sig === 'CALL' ? '#00f59b' : '#ff4757';
     } else if (data.state === 'IN_TRADE') {
       stepTrade.classList.add('active');
       const tr = data.current_trade ? `${data.current_trade.direction} $${data.current_trade.amount}` : '';
-      cycleMsgEl.textContent = `Operación abierta a 1m en ${data.pair}: ${tr}`;
+      cycleMsgEl.textContent = `Operación abierta a 5M en ${data.pair}: ${tr}`;
       cycleMsgEl.style.color = '#00d2ff';
     }
 
@@ -553,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (item.state === 'IN_TRADE') {
         cardClass += ' state-in-trade';
         stateBadgeClass = 'mp-badge-trade';
-        stateText = 'Operación 1M';
+        stateText = 'Operación 5M';
       }
 
       const signalBadge = item.signal ? 
@@ -624,9 +623,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // GUARDAR CONFIGURACIÓN DE PARÁMETROS & RIESGO
+  // GUARDAR CONFIGURACIÓN DE PARÁMETROS & RIESGO (5M ESTRICTO - SIN MARTINGALA)
   // ==========================================
-  const cfgMultiplier = document.getElementById('cfg-multiplier');
   const cfgStoploss = document.getElementById('cfg-stoploss');
   const cfgTakeprofit = document.getElementById('cfg-takeprofit');
   const btnSaveParamsText = document.getElementById('btn-save-params-text');
@@ -636,10 +634,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSaveParamsText) btnSaveParamsText.textContent = "Guardando...";
 
     const payload = {
-      timeframe: parseInt(cfgTimeframe.value),
+      timeframe: 300, // 5 Minutos fijos
       amount: parseFloat(cfgAmount.value),
-      martingale: parseInt(cfgMartingale.value),
-      martingale_multiplier: cfgMultiplier ? parseFloat(cfgMultiplier.value) : 2.2,
+      martingale: 0,  // Sin martingala
+      martingale_multiplier: 1.0,
       stop_loss: cfgStoploss ? parseFloat(cfgStoploss.value) : 20.0,
       take_profit: cfgTakeprofit ? parseFloat(cfgTakeprofit.value) : 50.0,
       account_type: testAccount ? testAccount.value : "PRACTICE"
@@ -654,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await resp.json();
       if (data.success) {
         logToTerminal(`✅ ${data.message}`, 'success');
-        if (btnSaveParamsText) btnSaveParamsText.textContent = "¡Parámetros Guardados!";
+        if (btnSaveParamsText) btnSaveParamsText.textContent = "¡Parámetros Guardados (5M)!";
         setTimeout(() => {
           if (btnSaveParamsText) btnSaveParamsText.textContent = "Guardar Parámetros de Riesgo";
         }, 2000);

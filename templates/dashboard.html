@@ -207,7 +207,7 @@
           <i class="fa-solid fa-satellite-dish fa-spin-pulse"></i>
           <h3>Radar Principal en Vivo Segundo a Segundo</h3>
         </div>
-        <div class="pair-tag" id="radar-pair-tag">{{ engine.active_pair }} • 1M</div>
+        <div class="pair-tag" id="radar-pair-tag">{{ engine.active_pair }} • 5M</div>
       </div>
 
       <div class="radar-grid">
@@ -227,12 +227,12 @@
               <div class="progress-fill" id="countdown-progress" style="width: 100%;"></div>
             </div>
           </div>
-          <span class="radar-sub" id="radar-candle-type">Timeframe Activo</span>
+          <span class="radar-sub" id="radar-candle-type">Vela de 5 Minutos (M5)</span>
         </div>
 
         <!-- Current Cycle State -->
         <div class="radar-box cycle-box">
-          <span class="radar-label">CICLO DE ESTRATEGIA VIP</span>
+          <span class="radar-label">CICLO DE ESTRATEGIA VIP (M5)</span>
           <div class="cycle-steps">
             <div class="c-step active" id="step-search">
               <span class="step-num">1</span>
@@ -246,10 +246,10 @@
             <div class="step-line"></div>
             <div class="c-step" id="step-trade">
               <span class="step-num">3</span>
-              <span class="step-txt">Operación 1M</span>
+              <span class="step-txt">Operación 5M</span>
             </div>
           </div>
-          <div class="cycle-status-msg" id="cycle-msg">Buscando cruce del Oscilador VIP...</div>
+          <div class="cycle-status-msg" id="cycle-msg">Buscando cruce del Oscilador VIP en velas M5...</div>
         </div>
       </div>
     </section>
@@ -317,32 +317,32 @@
         <form id="form-config" class="config-form">
           <div class="form-row">
             <div class="form-group">
-              <label for="cfg-timeframe"><i class="fa-solid fa-chart-simple"></i> Timeframe Análisis</label>
-              <select id="cfg-timeframe" name="timeframe" class="form-select">
-                <option value="60" {% if engine.timeframe == 60 %}selected{% endif %}>1 Minuto (M1)</option>
-                <option value="300" {% if engine.timeframe == 300 %}selected{% endif %}>5 Minutos (M5)</option>
+              <label for="cfg-timeframe"><i class="fa-solid fa-chart-simple"></i> Timeframe de Velas</label>
+              <select id="cfg-timeframe" name="timeframe" class="form-select" disabled style="opacity: 0.95; cursor: not-allowed; background: rgba(0, 245, 155, 0.08); border-color: rgba(0, 245, 155, 0.4); color: #00f59b; font-weight: 700;">
+                <option value="300" selected>5 Minutos (M5) - Estricto</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label for="cfg-amount"><i class="fa-solid fa-dollar-sign"></i> Importe Base ($)</label>
+              <label for="cfg-amount"><i class="fa-solid fa-dollar-sign"></i> Importe Base Fijo ($)</label>
               <input type="number" id="cfg-amount" name="amount" min="1" step="0.5" value="{{ engine.base_amount }}" class="form-input">
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label for="cfg-martingale"><i class="fa-solid fa-calculator"></i> Pasos Martingala</label>
-              <select id="cfg-martingale" name="martingale" class="form-select">
-                <option value="0" {% if engine.martingale_steps == 0 %}selected{% endif %}>0 (Sin Martingala)</option>
-                <option value="1" {% if engine.martingale_steps == 1 %}selected{% endif %}>1 Paso (Recomendado)</option>
-                <option value="2" {% if engine.martingale_steps == 2 %}selected{% endif %}>2 Pasos</option>
-              </select>
+              <label><i class="fa-solid fa-ban"></i> Sistema Martingala</label>
+              <div style="padding: 10px 14px; background: rgba(255, 71, 87, 0.08); border: 1px solid rgba(255, 71, 87, 0.3); border-radius: 8px; color: #ff4757; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-circle-xmark"></i> Desactivado (Operativa Fija Sin Martingala)
+              </div>
+              <input type="hidden" id="cfg-martingale" name="martingale" value="0">
             </div>
 
             <div class="form-group">
-              <label for="cfg-multiplier"><i class="fa-solid fa-xmark"></i> Multiplicador Martingala</label>
-              <input type="number" id="cfg-multiplier" name="martingale_multiplier" min="1.5" max="3.0" step="0.1" value="{{ engine.martingale_multiplier }}" class="form-input">
+              <label><i class="fa-solid fa-clock"></i> Expiración de Operación</label>
+              <div style="padding: 10px 14px; background: rgba(0, 210, 255, 0.08); border: 1px solid rgba(0, 210, 255, 0.3); border-radius: 8px; color: #00d2ff; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-hourglass-half"></i> 5 Minutos (M5) Fija
+              </div>
             </div>
           </div>
 

@@ -70,7 +70,7 @@ class TelegramNotifier:
         )
         return self.send_message(msg)
 
-    def notify_entry(self, pair: str, direction: str, entry_time: str, entry_price: float, expiration: int = 1, amount: float = 0.0):
+    def notify_entry(self, pair: str, direction: str, entry_time: str, entry_price: float, expiration: int = 5, amount: float = 0.0):
         """Notificación en el segundo 00 al ejecutar la operación confirmada"""
         icon = "🟢 COMPRA (CALL)" if direction == "CALL" else "🔴 VENTA (PUT)"
         msg = (
@@ -78,10 +78,10 @@ class TelegramNotifier:
             f"📊 <b>Activo:</b> <code>{pair}</code>\n"
             f"🎯 <b>Acción:</b> <b>{icon}</b>\n"
             f"⏰ <b>Hora Entrada:</b> <code>{entry_time}</code> (Segundo 00)\n"
-            f"⏳ <b>Expiración:</b> <b>{expiration} Minuto(s)</b>\n"
+            f"⏳ <b>Expiración:</b> <b>{expiration} Minutos (M5)</b>\n"
             f"💵 <b>Precio Entrada:</b> <code>{entry_price:.5f}</code>\n"
-            f"💰 <b>Importe:</b> <code>${amount:.2f}</code>\n\n"
-            f"⏱ <i>Monitoreando segundo a segundo hasta el cierre...</i>\n"
+            f"💰 <b>Importe Fijo:</b> <code>${amount:.2f}</code> (Sin Martingala)\n\n"
+            f"⏱ <i>Monitoreando segundo a segundo hasta el cierre de la vela M5...</i>\n"
             f"🤖 <b>Trader 4 Less</b> | @traderfxapp"
         )
         return self.send_message(msg)
@@ -132,7 +132,8 @@ class TelegramNotifier:
             f"💼 <b>Cuenta:</b> {account_type}\n"
             f"💰 <b>Saldo:</b> ${balance:.2f}\n"
             f"📊 <b>Pares Activos:</b> <code>{pair}</code>\n"
-            f"⏱ <b>Estrategia:</b> SCRIPT VIP (1m / 5m)\n"
+            f"⏱ <b>Estrategia:</b> SCRIPT VIP (Velas 5M - Sin Martingala)\n"
+            f"⏳ <b>Expiración:</b> 5 Minutos (M5)\n"
             f"👤 <b>Admin:</b> @{self.admin_user}\n"
             f"📢 <b>Canal:</b> @traderfxapp"
         )

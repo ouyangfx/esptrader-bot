@@ -64,10 +64,10 @@ class PairsSaveModel(BaseModel):
     pairs: List[str]
 
 class ParamsSaveModel(BaseModel):
-    timeframe: int = 60
+    timeframe: int = 300
     amount: float = 2.0
-    martingale: int = 1
-    martingale_multiplier: float = 2.2
+    martingale: int = 0
+    martingale_multiplier: float = 1.0
     stop_loss: Optional[float] = 20.0
     take_profit: Optional[float] = 50.0
     account_type: Optional[str] = "PRACTICE"
@@ -277,34 +277,33 @@ async def api_save_params(data: ParamsSaveModel, request: Request):
         raise HTTPException(status_code=401, detail="No autorizado")
     engine = request.app.state.engine
     
-    tf = int(data.timeframe)
     amt = float(data.amount)
-    mg_steps = int(data.martingale)
-    mg_mult = float(data.martingale_multiplier)
     sl = float(data.stop_loss or 20.0)
     tp = float(data.take_profit or 50.0)
     acc = str(data.account_type or "PRACTICE").upper()
     
+    # Velas de 5 Minutos (M5) y Sin Martingala estrictos
     save_env_vars({
-        "TIMEFRAME": str(tf),
+        "TIMEFRAME": "300",
+        "EXPIRATION_TIME": "5",
         "TRADE_AMOUNT": str(amt),
-        "MARTINGALE_STEPS": str(mg_steps),
-        "MARTINGALE_MULTIPLIER": str(mg_mult),
+        "MARTINGALE_STEPS": "0",
+        "MARTINGALE_MULTIPLIER": "1.0",
         "STOP_LOSS": str(sl),
         "TAKE_PROFIT": str(tp),
         "IQ_ACCOUNT_TYPE": acc
     })
     
-    engine.timeframe = tf
+    engine.timeframe = 300
+    engine.expiration = 5
     engine.base_amount = amt
-    if engine.current_martingale_step == 0:
-        engine.current_amount = amt
-    engine.martingale_steps = mg_steps
-    engine.martingale_multiplier = mg_mult
+    engine.current_amount = amt
+    engine.martingale_steps = 0
+    engine.martingale_multiplier = 1.0
     if acc != engine.iq.account_type:
         engine.iq.change_balance(acc)
         
-    return {"success": True, "message": f"Parámetros de trading y riesgo guardados en .env exitosamente."}
+    return {"success": True, "message": f"Configuración guardada: Velas de 5 Minutos (M5), Expiración 5m, Operativa fija sin Martingala."}
 
 @router.post("/api/pairs/update")
 async def api_update_pairs(data: PairsUpdateModel, request: Request):

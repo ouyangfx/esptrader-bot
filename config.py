@@ -24,11 +24,12 @@ class Config:
     ALL_AVAILABLE_PAIRS = ALL_AVAILABLE_PAIRS
     TRADING_PAIRS = _selected
 
-    TIMEFRAME = int(os.getenv("TIMEFRAME", "60"))  # 60s (1m) or 300s (5m)
-    EXPIRATION_TIME = int(os.getenv("EXPIRATION_TIME", "1"))  # 1 min
+    # Estrategia estrictamente en Velas de 5 Minutos (M5) y Sin Martingala
+    TIMEFRAME = 300  # 300s (5 Minutos estrictos)
+    EXPIRATION_TIME = 5  # Expiración a 5 minutos
     TRADE_AMOUNT = float(os.getenv("TRADE_AMOUNT", "2.0"))
-    MARTINGALE_STEPS = int(os.getenv("MARTINGALE_STEPS", "1"))
-    MARTINGALE_MULTIPLIER = float(os.getenv("MARTINGALE_MULTIPLIER", "2.2"))
+    MARTINGALE_STEPS = 0  # No existe martingala
+    MARTINGALE_MULTIPLIER = 1.0  # Sin incremento
     STOP_LOSS = float(os.getenv("STOP_LOSS", "20.0"))
     TAKE_PROFIT = float(os.getenv("TAKE_PROFIT", "50.0"))
 

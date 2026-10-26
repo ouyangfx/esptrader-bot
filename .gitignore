@@ -46,3 +46,5 @@ data/*.sqlite3
 .idea/
 *.swp
 *.swo
+
+vps_*.py

@@ -25,10 +25,6 @@
 #property indicator_width2  3
 
 //--- Entradas de Configuración
-input group "=== LICENCIA VIP ==="
-input string   InpServerUrl       = "https://tradingsnr.info"; // Servidor VPS
-input string   InpLicenseKey      = "VIP-MASTER-2026-KEY";     // Clave de Licencia VIP
-
 input group "=== CONFIGURACIÓN DE RÉPLICAS ==="
 input int      InpLookbackM30     = 50;           // Velas M30 a analizar en historial
 input double   InpMinSimilarity   = 82.0;         // Mínimo % de Similitud (80-95%)
@@ -65,16 +61,8 @@ int OnInit()
    ArraySetAsSeries(BufferBuy, true);
    ArraySetAsSeries(BufferSell, true);
 
-   // Validar Licencia
-   if(!ValidateLicense())
-   {
-      Print("Replica Master VIP: Esperando autenticación del EA OTC_Feed_Bridge...");
-      DrawHUD("⚠️ ESPERANDO EA BRIDGE", clrYellow, 0.0, "Inicia OTC_Feed_Bridge");
-      return(INIT_SUCCEEDED);
-   }
-
-   DrawHUD("🟢 LICENCIA VIP ACTIVA", clrSpringGreen, 0.0, "Buscando Réplicas M30...");
-   Print("Indicador Replica Master VIP iniciado con éxito. Licencia para: ", g_client_name);
+   DrawHUD("🟢 RÉPLICAS ACTIVAS", clrSpringGreen, 0.0, "Buscando Réplicas M30...");
+   Print("Indicador Replica Master VIP iniciado con éxito.");
    return(INIT_SUCCEEDED);
 }
 
@@ -101,19 +89,7 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
 {
-   if(rates_total < 50) return(0);
-
-   // Verificar licencia periódicamente o si aún no estaba validada
-   if(!g_license_valid || (TimeCurrent() - g_last_check > 300))
-   {
-      if(!ValidateLicense())
-      {
-         DrawHUD("⚠️ ESPERANDO EA BRIDGE", clrYellow, 0.0, "Inicia OTC_Feed_Bridge");
-         return(0);
-      }
-      g_last_check = TimeCurrent();
-      DrawHUD("🟢 LICENCIA VIP ACTIVA", clrSpringGreen, 0.0, "Buscando Réplicas M30...");
-   }
+   if(rates_total < 10) return(0);
 
    // 1. Obtener Velas de M30 para el análisis fractal
    MqlRates ratesM30[];
@@ -290,55 +266,6 @@ void TriggerAlert(string dir, string sym, double sim)
    {
       SendNotification(msg);
    }
-}
-
-//+------------------------------------------------------------------+
-//| Valida la Licencia consultando el EA Bridge o archivo compartido |
-//+------------------------------------------------------------------+
-bool ValidateLicense()
-{
-   long my_account = AccountInfoInteger(ACCOUNT_LOGIN);
-
-   // 1. Revisar Variable Global en memoria activada por OTC_Feed_Bridge
-   if(GlobalVariableCheck("OTC_VIP_LICENSE_ACTIVE"))
-   {
-      double active = GlobalVariableGet("OTC_VIP_LICENSE_ACTIVE");
-      double acc = GlobalVariableGet("OTC_VIP_LICENSE_ACCOUNT");
-      if(active == 1.0 && (long)acc == my_account)
-      {
-         g_license_valid = true;
-         if(g_client_name == "") g_client_name = "Trader VIP (Admin Master)";
-         return true;
-      }
-   }
-
-   // 2. Revisar Archivo Compartido en FILE_COMMON
-   int f = FileOpen("otc_vip_license.txt", FILE_READ | FILE_TXT | FILE_COMMON);
-   if(f != INVALID_HANDLE)
-   {
-      string line = FileReadString(f);
-      FileClose(f);
-
-      string parts[];
-      int n = StringSplit(line, '|', parts);
-      if(n >= 3)
-      {
-         long file_acc = StringToInteger(parts[0]);
-         string file_key = parts[1];
-         string file_client = parts[2];
-         long file_exp = (n >= 4) ? StringToInteger(parts[3]) : 0;
-
-         if(file_acc == my_account && (file_key == InpLicenseKey || file_key != "") && (file_exp == 0 || TimeCurrent() < (datetime)file_exp))
-         {
-            g_license_valid = true;
-            g_client_name = file_client;
-            return true;
-         }
-      }
-   }
-
-   g_license_valid = false;
-   return false;
 }
 
 //+------------------------------------------------------------------+

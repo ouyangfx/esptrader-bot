@@ -1,21 +1,19 @@
 //+------------------------------------------------------------------+
 //|                                             OTC_Feed_Bridge.mq5  |
 //|                             Trader 4 Less - VIP Algorithm System |
-//|                                         https://tradingsnr.info  |
+//|                                              Puente Local PC MT5 |
 //+------------------------------------------------------------------+
 #property copyright "Trader 4 Less VIP"
 #property link      "https://tradingsnr.info"
-#property version   "1.00"
-#property description "Puente de Datos IQ Option OTC hacia MetaTrader 5"
-#property description "Crea y actualiza los 10 pares OTC en tiempo real"
+#property version   "2.00"
+#property description "Puente Local de Datos IQ Option OTC para MetaTrader 5"
+#property description "Lee el flujo local de alta frecuencia con latencia 0 ms"
 
 #include <Trade\Trade.mqh>
 
 //--- Entradas de Configuración
-input group "=== CREDENCIALES & LICENCIA ==="
-input string   InpServerUrl    = "https://tradingsnr.info"; // Servidor VPS
-input string   InpLicenseKey   = "VIP-MASTER-2026-KEY";     // Clave de Licencia VIP
-input int      InpTimerMs      = 500;                       // Intervalo Actualización (ms)
+input group "=== CONFIGURACIÓN LOCAL ==="
+input int InpTimerMs = 100; // Intervalo de Actualización Local (ms)
 
 //--- Lista de los 10 Pares OTC Oficiales
 const string OTC_PAIRS[10] = {
@@ -24,13 +22,7 @@ const string OTC_PAIRS[10] = {
 };
 
 //--- Variables Globales de Estado
-bool     g_license_valid = false;
-string   g_client_name   = "";
-string   g_expires_at    = "";
-datetime g_last_check    = 0;
 ulong    g_ticks_count   = 0;
-
-// Variables de control de ticks y barras en vivo para los 10 pares
 long     g_last_tick_msc[10];
 datetime g_bar_time[10];
 double   g_bar_open[10];
@@ -39,7 +31,6 @@ double   g_bar_low[10];
 double   g_bar_close[10];
 long     g_bar_vol[10];
 bool     g_pair_seeded[10];
-int      g_bg_seed_idx   = 0;
 
 int GetPairIndex(string sym)
 {
@@ -55,19 +46,12 @@ int GetPairIndex(string sym)
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   Print("=== Iniciando OTC Feed Bridge para MetaTrader 5 ===");
-   
-   // 1. Validar Licencia con el Servidor VPS
-   if(!ValidateLicense())
-   {
-      DrawHUD("❌ LICENCIA DENEGADA", clrRed, "Contacta al Administrador");
-      return(INIT_FAILED);
-   }
+   Print("=== Iniciando Puente Local OTC para MetaTrader 5 ===");
 
-   // 2. Crear los 10 Símbolos Personalizados OTC si no existen
+   // 1. Crear los 10 Símbolos Personalizados OTC si no existen
    CreateCustomOTCSymbols();
 
-   // Inicializar estados de los 10 pares
+   // 2. Inicializar estados en memoria
    for(int i = 0; i < 10; i++)
    {
       g_last_tick_msc[i] = 0;
@@ -77,26 +61,29 @@ int OnInit()
       g_bar_low[i] = 0.0;
       g_bar_close[i] = 0.0;
       g_bar_vol[i] = 0;
-      g_pair_seeded[i] = (iBars(OTC_PAIRS[i], PERIOD_M1) >= 40);
-   }
-   g_bg_seed_idx = 0;
+      g_pair_seeded[i] = false;
 
-   // 3. Configurar el gráfico para mostrar velas completas con colores institucionales
+      // Cargar historial de velas M1 desde el archivo local
+      SeedHistoryFromLocalFile(OTC_PAIRS[i]);
+   }
+
+   // 3. Configurar gráfico activo para velas japonesas
    ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
    ChartSetInteger(0, CHART_AUTOSCROLL, true);
    ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, C'0, 230, 118');
    ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, C'255, 23, 68');
    ChartSetInteger(0, CHART_COLOR_CHART_UP, C'0, 230, 118');
    ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'255, 23, 68');
+   ChartNavigate(0, CHART_END, 0);
    ChartRedraw(0);
 
-   // 4. Inicializar Timer de alta frecuencia (500 ms)
+   // 4. Iniciar Timer de alta velocidad (100 ms)
    EventSetMillisecondTimer(InpTimerMs);
 
    // 5. Dibujar Panel Informativo
-   DrawHUD("🟢 CONECTADO AL VPS", clrSpringGreen, "Iniciando streaming en vivo...");
+   DrawHUD("🟢 PUENTE LOCAL ACTIVO", clrSpringGreen, "Streaming local 0 ms");
 
-   Print("OTC Feed Bridge iniciado con éxito en milisegundos. Licencia activa para: ", g_client_name);
+   Print("Puente Local iniciado con éxito. Esperando ticks de Local_OTC_Bridge.py...");
    return(INIT_SUCCEEDED);
 }
 
@@ -107,135 +94,15 @@ void OnDeinit(const int reason)
 {
    EventKillTimer();
    ObjectsDeleteAll(0, "OTC_HUD_");
-   Print("OTC Feed Bridge detenido.");
+   Print("Puente Local detenido.");
 }
 
 //+------------------------------------------------------------------+
-//| Evento Timer de Alta Frecuencia (Streaming de Ticks & Velas)     |
+//| Evento Timer de Alta Frecuencia (Lee archivo local en FILE_COMMON)|
 //+------------------------------------------------------------------+
 void OnTimer()
 {
-   // Reverificar licencia cada 20 minutos
-   if(TimeCurrent() - g_last_check > 1200)
-   {
-      if(!ValidateLicense())
-      {
-         EventKillTimer();
-         Alert("⚠️ Tu licencia ha expirado o fue revocada.");
-         DrawHUD("❌ LICENCIA EXPIRADA", clrRed, "Acceso bloqueado");
-         return;
-      }
-      g_last_check = TimeCurrent();
-   }
-
-   // 1. Si el símbolo actual no tiene historial en MT5, sembrarlo una sola vez
-   string curSym = _Symbol;
-   int curIdx = GetPairIndex(curSym);
-   if(curIdx >= 0 && !g_pair_seeded[curIdx])
-   {
-      if(iBars(curSym, PERIOD_M1) < 40)
-      {
-         SeedHistoryCandles(curSym);
-      }
-      g_pair_seeded[curIdx] = true;
-   }
-   else if(g_bg_seed_idx < 10)
-   {
-      // En segundo plano, sembrar otros pares que no tengan barras (1 por ciclo)
-      if(!g_pair_seeded[g_bg_seed_idx])
-      {
-         if(iBars(OTC_PAIRS[g_bg_seed_idx], PERIOD_M1) < 40)
-         {
-            SeedHistoryCandles(OTC_PAIRS[g_bg_seed_idx]);
-         }
-         g_pair_seeded[g_bg_seed_idx] = true;
-      }
-      g_bg_seed_idx++;
-   }
-
-   // 2. Solicitar datos OTC al VPS e inyectar en ticks y velas
-   FetchAndFeedOTCData();
-}
-
-//+------------------------------------------------------------------+
-//| Valida la Licencia mediante WebRequest con reintentos            |
-//+------------------------------------------------------------------+
-bool ValidateLicense()
-{
-   string url = InpServerUrl + "/api/mt5/license/validate?license_key=" + InpLicenseKey + "&account=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
-   char post_data[];
-   char result[];
-   string result_headers;
-   string headers = "User-Agent: MT5-Bridge/2026\r\nContent-Type: application/json\r\n";
-
-   int max_retries = 3;
-   int last_err = 0;
-   int http_code = 0;
-
-   for(int attempt = 1; attempt <= max_retries; attempt++)
-   {
-      ResetLastError();
-      http_code = WebRequest("GET", url, headers, 12000, post_data, result, result_headers);
-      last_err = GetLastError();
-
-      if(http_code == 200)
-         break;
-
-      if(attempt < max_retries)
-      {
-         PrintFormat("Intento %d de validación falló (HTTP: %d, Err: %d). Reintentando en 1.5s...", attempt, http_code, last_err);
-         Sleep(1500);
-      }
-   }
-
-   if(http_code == -1)
-   {
-      Print("Error en WebRequest: ", last_err);
-      if(last_err == 4060)
-      {
-         Alert("⚠️ ERROR MT5 (Código 4060): La URL '" + InpServerUrl + "' no está permitida para WebRequest.\nPor favor ve en MT5 a: Herramientas -> Opciones -> Asesores Expertos y agrega '" + InpServerUrl + "' a la lista.");
-      }
-      else
-      {
-         Alert("⚠️ Error de conexión con el VPS (Código " + IntegerToString(last_err) + "). Verifica tu conexión a internet o el estado del VPS.");
-      }
-      return false;
-   }
-
-   string response = CharArrayToString(result);
-   if(http_code == 200 && (StringFind(response, "\"valid\":true") >= 0 || StringFind(response, "\"success\":true") >= 0))
-   {
-      g_license_valid = true;
-      // Extraer nombre de cliente si existe
-      int namePos = StringFind(response, "\"client_name\":\"");
-      if(namePos >= 0)
-      {
-         int endPos = StringFind(response, "\"", namePos + 15);
-         if(endPos > namePos)
-            g_client_name = StringSubstr(response, namePos + 15, endPos - (namePos + 15));
-      }
-      
-      // Registrar variables globales para que los indicadores las lean al instante
-      long my_acc = AccountInfoInteger(ACCOUNT_LOGIN);
-      GlobalVariableSet("OTC_VIP_LICENSE_ACTIVE", 1.0);
-      GlobalVariableSet("OTC_VIP_LICENSE_ACCOUNT", (double)my_acc);
-      GlobalVariableSet("OTC_VIP_LICENSE_TS", (double)TimeCurrent());
-
-      // Guardar token en archivo compartido FILE_COMMON
-      int f = FileOpen("otc_vip_license.txt", FILE_WRITE | FILE_TXT | FILE_COMMON);
-      if(f != INVALID_HANDLE)
-      {
-         FileWriteString(f, IntegerToString(my_acc) + "|" + InpLicenseKey + "|" + g_client_name + "|" + IntegerToString((long)(TimeCurrent() + 86400 * 30)));
-         FileClose(f);
-      }
-
-      Print("Licencia validada exitosamente para: ", g_client_name, " (Cuenta MT5: ", my_acc, ")");
-      return true;
-   }
-
-   g_license_valid = false;
-   Alert("❌ LICENCIA INVÁLIDA O EXPIRADA. La clave '" + InpLicenseKey + "' no está autorizada para la cuenta " + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".\nContacta al Administrador @ouyangfx.");
-   return false;
+   ReadLocalLiveTicks();
 }
 
 //+------------------------------------------------------------------+
@@ -248,7 +115,6 @@ void CreateCustomOTCSymbols()
       string sym = OTC_PAIRS[i];
       ResetLastError();
 
-      // Verificar si ya existe
       if(!SymbolInfoInteger(sym, SYMBOL_CUSTOM))
       {
          if(CustomSymbolCreate(sym, "IQ_OTC", "Trader 4 Less OTC Market"))
@@ -265,31 +131,29 @@ void CreateCustomOTCSymbols()
             Print("Símbolo personalizado creado con éxito: ", sym);
          }
       }
-
-      // Asegurar que esté visible en Observación de Mercado
       SymbolSelect(sym, true);
    }
 }
 
 //+------------------------------------------------------------------+
-//| Descarga velas históricas M1 e inyecta en el Símbolo Custom      |
+//| Carga historial de velas M1 desde el archivo local en FILE_COMMON|
 //+------------------------------------------------------------------+
-void SeedHistoryCandles(string sym)
+void SeedHistoryFromLocalFile(string sym)
 {
-   string url = InpServerUrl + "/api/mt5/feed/history?license_key=" + InpLicenseKey + "&symbol=" + sym + "&count=150";
-   char post_data[];
-   char result[];
-   string result_headers;
-   string headers = "User-Agent: MT5-Bridge/2026\r\n";
-
-   int res = WebRequest("GET", url, headers, 10000, post_data, result, result_headers);
-   if(res != 200)
+   string filename = "otc_history_" + sym + ".json";
+   int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_COMMON);
+   if(handle == INVALID_HANDLE)
    {
-      PrintFormat("Aviso: No se pudo obtener historial para %s (HTTP: %d)", sym, res);
       return;
    }
 
-   string json = CharArrayToString(result);
+   string json = "";
+   while(!FileIsEnding(handle))
+   {
+      json += FileReadString(handle);
+   }
+   FileClose(handle);
+
    int cPos = StringFind(json, "\"candles\":[");
    if(cPos < 0) return;
 
@@ -299,11 +163,11 @@ void SeedHistoryCandles(string sym)
    string arrStr = StringSubstr(json, cPos, endArr - cPos + 1);
 
    MqlRates rates[];
-   ArrayResize(rates, 200);
+   ArrayResize(rates, 1000);
    int ratesCount = 0;
    int curIdx = 0;
 
-   while(ratesCount < 200)
+   while(ratesCount < 1000)
    {
       int objStart = StringFind(arrStr, "{", curIdx);
       if(objStart < 0) break;
@@ -338,50 +202,50 @@ void SeedHistoryCandles(string sym)
    {
       ArrayResize(rates, ratesCount);
       int updated = CustomRatesUpdate(sym, rates, ratesCount);
-      Print("✅ ", sym, ": ", updated, " velas M1 inyectadas con éxito.");
-      if(sym == _Symbol)
-      {
-         ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
-         ChartSetInteger(0, CHART_AUTOSCROLL, true);
-         ChartNavigate(0, CHART_END, 0);
-         ChartRedraw(0);
-      }
+      Print("✅ ", sym, ": ", updated, " velas históricas M1 inyectadas desde archivo local.");
+      int idx = GetPairIndex(sym);
+      if(idx >= 0) g_pair_seeded[idx] = true;
    }
 }
 
 //+------------------------------------------------------------------+
-//| Obtiene los Ticks y actualiza velas en vivo en tiempo real        |
+//| Lee los ticks en tiempo real desde otc_live.json en FILE_COMMON  |
 //+------------------------------------------------------------------+
-void FetchAndFeedOTCData()
+void ReadLocalLiveTicks()
 {
-   string url = InpServerUrl + "/api/mt5/feed/otc?license_key=" + InpLicenseKey;
-   char post_data[];
-   char result[];
-   string result_headers;
+   int handle = FileOpen("otc_live.json", FILE_READ | FILE_TXT | FILE_COMMON | FILE_SHARE_READ);
+   if(handle == INVALID_HANDLE)
+   {
+      return;
+   }
 
-   int res = WebRequest("GET", url, "", 6000, post_data, result, result_headers);
-   if(res != 200) return;
+   string json = "";
+   while(!FileIsEnding(handle))
+   {
+      json += FileReadString(handle);
+   }
+   FileClose(handle);
 
-   string response = CharArrayToString(result);
-   datetime global_server_ts = (datetime)ExtractDoubleValue(response, 0, "\"timestamp\":");
+   if(StringLen(json) < 20) return;
+
+   datetime global_server_ts = (datetime)ExtractDoubleValue(json, 0, "\"timestamp\":");
+   long global_msc = (long)ExtractDoubleValue(json, 0, "\"timestamp_msc\":");
+
    if(global_server_ts == 0) global_server_ts = TimeCurrent();
+   if(global_msc == 0) global_msc = (long)global_server_ts * 1000 + (long)(GetTickCount64() % 1000);
 
-   long now_sec = (long)global_server_ts;
-   long now_msc_base = now_sec * 1000 + (long)(GetTickCount64() % 1000);
+   bool chart_updated = false;
 
-   bool current_chart_updated = false;
-
-   // Inyectar datos en cada uno de los 10 pares OTC
+   // Procesar los 10 pares OTC
    for(int i = 0; i < 10; i++)
    {
       string sym = OTC_PAIRS[i];
-      int symPos = StringFind(response, "\"" + sym + "\"");
+      int symPos = StringFind(json, "\"" + sym + "\"");
       if(symPos < 0) continue;
 
-      // Extraer bid, ask y last
-      double bid = ExtractDoubleValue(response, symPos, "\"bid\":");
-      double ask = ExtractDoubleValue(response, symPos, "\"ask\":");
-      double last = ExtractDoubleValue(response, symPos, "\"last\":");
+      double bid = ExtractDoubleValue(json, symPos, "\"bid\":");
+      double ask = ExtractDoubleValue(json, symPos, "\"ask\":");
+      double last = ExtractDoubleValue(json, symPos, "\"last\":");
 
       if(bid > 0)
       {
@@ -389,13 +253,13 @@ void FetchAndFeedOTCData()
          double final_ask = (ask > 0) ? ask : (bid + spread);
          double final_last = (last > 0) ? last : bid;
 
-         // Asegurar time_msc estrictamente ascendente (exigencia de MT5 para ticks reales)
-         long tick_msc = now_msc_base;
+         // Asegurar time_msc estrictamente ascendente (regla estricta MT5)
+         long tick_msc = global_msc;
          if(tick_msc <= g_last_tick_msc[i])
             tick_msc = g_last_tick_msc[i] + 1;
          g_last_tick_msc[i] = tick_msc;
 
-         // 1. Inyectar Tick en Market Watch con milisegundos válidos
+         // 1. Inyectar Tick en Market Watch
          MqlTick ticks[1];
          ticks[0].time = (datetime)(tick_msc / 1000);
          ticks[0].time_msc = tick_msc;
@@ -409,7 +273,7 @@ void FetchAndFeedOTCData()
          g_ticks_count++;
 
          // 2. Actualizar o formar la vela M1 actual en vivo en el gráfico
-         datetime bar_ts = (datetime)(now_sec - (now_sec % 60));
+         datetime bar_ts = (datetime)(ticks[0].time - (ticks[0].time % 60));
          MqlRates live_rate[1];
          live_rate[0].time = bar_ts;
          live_rate[0].spread = 10;
@@ -448,20 +312,18 @@ void FetchAndFeedOTCData()
          CustomRatesUpdate(sym, live_rate, 1);
 
          if(sym == _Symbol)
-            current_chart_updated = true;
+            chart_updated = true;
       }
    }
 
-   // Si el gráfico activo recibió tick, forzar redibujado de MT5
-   if(current_chart_updated)
+   if(chart_updated)
    {
       ChartRedraw(0);
    }
 
-   // Actualizar HUD periódicamente
-   if(g_ticks_count % 15 == 0)
+   if(g_ticks_count % 25 == 0)
    {
-      DrawHUD("🟢 EN STREAMING ACTIVO", clrSpringGreen, "Ticks en vivo: " + IntegerToString(g_ticks_count));
+      DrawHUD("🟢 PUENTE LOCAL ACTIVO", clrSpringGreen, "Ticks locales: " + IntegerToString(g_ticks_count));
    }
 }
 
@@ -487,84 +349,28 @@ double ExtractDoubleValue(const string &json, int startPos, const string &key)
 }
 
 //+------------------------------------------------------------------+
-//| Parsea e inyecta velas M1 en el Custom Symbol                    |
-//+------------------------------------------------------------------+
-void InjectCandlesFromJSON(const string &json, int startPos, const string &sym)
-{
-   int cPos = StringFind(json, "\"m1_candles\":[", startPos);
-   if(cPos < 0) return;
-
-   int endArr = StringFind(json, "]", cPos);
-   if(endArr < 0) return;
-
-   string arrStr = StringSubstr(json, cPos, endArr - cPos);
-   int curIdx = 0;
-
-   MqlRates rates[25];
-   int ratesCount = 0;
-
-   while(ratesCount < 25)
-   {
-      int objStart = StringFind(arrStr, "{", curIdx);
-      if(objStart < 0) break;
-      int objEnd = StringFind(arrStr, "}", objStart);
-      if(objEnd < 0) break;
-
-      string obj = StringSubstr(arrStr, objStart, objEnd - objStart + 1);
-
-      datetime c_time = (datetime)ExtractDoubleValue(obj, 0, "\"time\":");
-      double c_open   = ExtractDoubleValue(obj, 0, "\"open\":");
-      double c_high   = ExtractDoubleValue(obj, 0, "\"high\":");
-      double c_low    = ExtractDoubleValue(obj, 0, "\"low\":");
-      double c_close  = ExtractDoubleValue(obj, 0, "\"close\":");
-      long   c_vol    = (long)ExtractDoubleValue(obj, 0, "\"vol\":");
-
-      if(c_time > 0 && c_open > 0)
-      {
-         rates[ratesCount].time = c_time;
-         rates[ratesCount].open = c_open;
-         rates[ratesCount].high = c_high;
-         rates[ratesCount].low  = c_low;
-         rates[ratesCount].close = c_close;
-         rates[ratesCount].tick_volume = c_vol > 0 ? c_vol : 10;
-         rates[ratesCount].spread = 10;
-         ratesCount++;
-      }
-      curIdx = objEnd + 1;
-   }
-
-   if(ratesCount > 0)
-   {
-      CustomRatesUpdate(sym, rates, ratesCount);
-   }
-}
-
-//+------------------------------------------------------------------+
 //| Dibuja el Panel Flotante en Pantalla                             |
 //+------------------------------------------------------------------+
 void DrawHUD(string statusText, color statusColor, string subtitle)
 {
    string prefix = "OTC_HUD_";
 
-   // Caja fondo
    if(ObjectFind(0, prefix + "BG") < 0)
    {
       ObjectCreate(0, prefix + "BG", OBJ_RECTANGLE_LABEL, 0, 0, 0);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_XDISTANCE, 20);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_YDISTANCE, 30);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_XSIZE, 300);
-      ObjectSetInteger(0, prefix + "BG", OBJPROP_YSIZE, 120);
+      ObjectSetInteger(0, prefix + "BG", OBJPROP_YSIZE, 110);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_BGCOLOR, C'12,18,28');
       ObjectSetInteger(0, prefix + "BG", OBJPROP_BORDER_COLOR, C'0,210,255');
       ObjectSetInteger(0, prefix + "BG", OBJPROP_CORNER, CORNER_LEFT_UPPER);
    }
 
-   // Título
-   CreateOrUpdateLabel(prefix + "T1", 35, 42, "TRADER 4 LESS - OTC FEED BRIDGE", clrWhite, 9, true);
+   CreateOrUpdateLabel(prefix + "T1", 35, 42, "TRADER 4 LESS - PUENTE LOCAL MT5", clrWhite, 9, true);
    CreateOrUpdateLabel(prefix + "T2", 35, 62, statusText, statusColor, 10, true);
-   CreateOrUpdateLabel(prefix + "T3", 35, 84, "Licencia: " + (g_client_name != "" ? g_client_name : "Activa"), clrGold, 8, false);
-   CreateOrUpdateLabel(prefix + "T4", 35, 104, subtitle, C'142,155,176', 8, false);
-   CreateOrUpdateLabel(prefix + "T5", 35, 124, "Pares: 10 OTC activos en vivo", clrDodgerBlue, 8, false);
+   CreateOrUpdateLabel(prefix + "T3", 35, 84, subtitle, C'142,155,176', 8, false);
+   CreateOrUpdateLabel(prefix + "T4", 35, 104, "Pares: 10 OTC activos en vivo", clrDodgerBlue, 8, false);
 
    ChartRedraw(0);
 }
@@ -583,4 +389,3 @@ void CreateOrUpdateLabel(string name, int x, int y, string text, color clr, int 
    ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
 }
-//+------------------------------------------------------------------+

@@ -184,7 +184,9 @@ async def api_start_bot(request: Request):
         raise HTTPException(status_code=401, detail="No autorizado")
     engine = request.app.state.engine
     success, msg = engine.start()
-    return {"success": success, "message": msg}
+    if success:
+        asyncio.create_task(engine.broadcast_status())
+    return {"success": success, "message": msg, "is_running": engine.is_running}
 
 @router.post("/api/bot/stop")
 async def api_stop_bot(request: Request):
@@ -192,7 +194,9 @@ async def api_stop_bot(request: Request):
         raise HTTPException(status_code=401, detail="No autorizado")
     engine = request.app.state.engine
     success, msg = engine.stop()
-    return {"success": success, "message": msg}
+    if success:
+        asyncio.create_task(engine.broadcast_status())
+    return {"success": success, "message": msg, "is_running": engine.is_running}
 
 @router.post("/api/iq/test-connection")
 async def api_test_iq_connection(data: IqTestModel, request: Request):

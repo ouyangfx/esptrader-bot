@@ -132,7 +132,7 @@ class TradingEngine:
         
         balance = self.iq.get_balance()
         pairs_str = ", ".join(self.selected_pairs[:6]) + (f" (+{pairs_count - 6} más)" if pairs_count > 6 else "")
-        self.telegram.notify_bot_status(True, pairs_str, self.iq.account_type, balance)
+        asyncio.create_task(asyncio.to_thread(self.telegram.notify_bot_status, True, pairs_str, self.iq.account_type, balance))
         logger.info(f"Bot iniciado con {pairs_count} pares en simultáneo (Modo Secuencial 1 a la vez): {self.selected_pairs}")
         return True, f"Bot encendido exitosamente con {pairs_count} pares en escaneo activo."
 
@@ -153,7 +153,7 @@ class TradingEngine:
         
         self.current_status_message = "Bot detenido por el usuario."
         balance = self.iq.get_balance()
-        self.telegram.notify_bot_status(False, f"{len(self.selected_pairs)} pares", self.iq.account_type, balance)
+        asyncio.create_task(asyncio.to_thread(self.telegram.notify_bot_status, False, f"{len(self.selected_pairs)} pares", self.iq.account_type, balance))
         logger.info("Bot detenido.")
         return True, "Bot apagado correctamente."
 
@@ -287,12 +287,18 @@ class TradingEngine:
                 if current_int_sec != last_strategy_second:
                     last_strategy_second = current_int_sec
                     if self.is_running and self.selected_pairs:
-                        await self._tick_sequential_strategy()
+                        try:
+                            await self._tick_sequential_strategy()
+                        except Exception as e_strat:
+                            logger.error(f"Error en estrategia secuencial: {e_strat}", exc_info=True)
                     else:
                         self.seconds_left_in_candle = 0
                         self.current_status_message = "Bot detenido - Esperando activación en el panel admin"
 
-                    await self.broadcast_status()
+                    try:
+                        await self.broadcast_status()
+                    except Exception as e_bc:
+                        logger.error(f"Error en broadcast_status: {e_bc}")
 
             except Exception as e:
                 logger.error(f"Error en bucle de TradingEngine: {e}", exc_info=True)
@@ -310,6 +316,7 @@ class TradingEngine:
         server_ts = self.iq.get_server_timestamp()
         dt_server = datetime.fromtimestamp(server_ts)
         time_str = dt_server.strftime("%H:%M:%S")
+        current_int_sec = int(server_ts)
 
         # =========================================================
         # FASE 1: SEARCHING (Todos los pares se analizan hasta que APARECE UNA SEÑAL)

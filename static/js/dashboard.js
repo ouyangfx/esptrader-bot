@@ -427,21 +427,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ==========================================
-  // ACTUALIZACIÓN COMPLETA DEL DASHBOARD
-  // ==========================================
-  function updateDashboard(data) {
-    isBotRunning = data.is_running;
-    currentActiveTimeframe = data.timeframe || 60;
-
-    // Estado del botón y Hero
+  function setBotRunningState(running) {
+    isBotRunning = running;
     if (isBotRunning) {
       heroCard.classList.add('bot-running');
       btnToggle.className = 'btn-power btn-stop';
       btnToggle.innerHTML = '<i class="fa-solid fa-stop"></i> <span id="btn-power-text">DETENER BOT</span>';
       statusTitleEl.textContent = "BOT ACTIVO & ESCANEANDO";
       statusTitleEl.style.color = "#00f59b";
-      statusDescEl.textContent = data.status_message || "Escaneo en vivo segundo a segundo activo.";
+      statusDescEl.textContent = "Escaneo en vivo segundo a segundo activo.";
     } else {
       heroCard.classList.remove('bot-running');
       btnToggle.className = 'btn-power btn-start glow-button';
@@ -450,6 +444,17 @@ document.addEventListener('DOMContentLoaded', () => {
       statusTitleEl.style.color = "#8e9bb0";
       statusDescEl.textContent = "Selecciona los pares a analizar y enciende el bot para iniciar el escaneo.";
     }
+  }
+
+  // ==========================================
+  // ACTUALIZACIÓN COMPLETA DEL DASHBOARD
+  // ==========================================
+  function updateDashboard(data) {
+    setBotRunningState(data.is_running);
+    if (data.status_message && isBotRunning) {
+      statusDescEl.textContent = data.status_message;
+    }
+    currentActiveTimeframe = data.timeframe || 60;
 
     // Cuenta y Saldo
     accountModeEl.textContent = data.account_type || "PRACTICE";
@@ -604,7 +609,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const resp = await fetch(endpoint, { method: 'POST' });
       const result = await resp.json();
-      if (!result.success && !isBotRunning) {
+      if (result.success) {
+        const nextState = result.is_running !== undefined ? result.is_running : !isBotRunning;
+        setBotRunningState(nextState);
+      } else {
         alert(result.message);
       }
       logToTerminal(result.message, result.success ? 'success' : 'error');

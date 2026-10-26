@@ -5,9 +5,9 @@
 //+------------------------------------------------------------------+
 #property copyright "Trader 4 Less VIP"
 #property link      "https://tradingsnr.info"
-#property version   "2.00"
+#property version   "2.50"
 #property description "Puente Local de Datos IQ Option OTC para MetaTrader 5"
-#property description "Lee el flujo local de alta frecuencia con latencia 0 ms"
+#property description "Carga 24 Horas de Velas M1 e inyecta ticks en tiempo real con 0 ms de latencia"
 
 #include <Trade\Trade.mqh>
 
@@ -31,6 +31,7 @@ double   g_bar_low[10];
 double   g_bar_close[10];
 long     g_bar_vol[10];
 bool     g_pair_seeded[10];
+datetime g_last_history_check = 0;
 
 int GetPairIndex(string sym)
 {
@@ -46,12 +47,13 @@ int GetPairIndex(string sym)
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   Print("=== Iniciando Puente Local OTC para MetaTrader 5 ===");
+   Print("=== [INICIO] Puente Local OTC 24H para MetaTrader 5 ===");
 
    // 1. Crear los 10 Símbolos Personalizados OTC si no existen
    CreateCustomOTCSymbols();
 
-   // 2. Inicializar estados en memoria
+   // 2. Inicializar estados en memoria y cargar las 24 Horas de Velas M1
+   int totalLoaded = 0;
    for(int i = 0; i < 10; i++)
    {
       g_last_tick_msc[i] = 0;
@@ -63,17 +65,23 @@ int OnInit()
       g_bar_vol[i] = 0;
       g_pair_seeded[i] = false;
 
-      // Cargar historial de velas M1 desde el archivo local
-      SeedHistoryFromLocalFile(OTC_PAIRS[i]);
+      // Cargar 24h de velas M1 desde archivo CSV
+      if(LoadHistoryCSV(OTC_PAIRS[i]))
+      {
+         totalLoaded++;
+      }
    }
 
-   // 3. Configurar gráfico activo para velas japonesas
+   // 3. Configurar gráfico activo para velas japonesas y refrescar vista
    ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
    ChartSetInteger(0, CHART_AUTOSCROLL, true);
+   ChartSetInteger(0, CHART_SHIFT, true);
+   ChartSetDouble(0, CHART_SHIFT_SIZE, 10.0);
    ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, C'0, 230, 118');
    ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, C'255, 23, 68');
    ChartSetInteger(0, CHART_COLOR_CHART_UP, C'0, 230, 118');
    ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'255, 23, 68');
+   ChartSetSymbolPeriod(0, _Symbol, _Period);
    ChartNavigate(0, CHART_END, 0);
    ChartRedraw(0);
 
@@ -81,7 +89,7 @@ int OnInit()
    EventSetMillisecondTimer(InpTimerMs);
 
    // 5. Dibujar Panel Informativo
-   DrawHUD("🟢 PUENTE LOCAL ACTIVO", clrSpringGreen, "Streaming local 0 ms");
+   DrawHUD("🟢 PUENTE LOCAL ACTIVO", clrSpringGreen, "Velas 24h cargadas (" + IntegerToString(totalLoaded) + "/10 pares)");
 
    Print("Puente Local iniciado con éxito. Esperando ticks de Local_OTC_Bridge.py...");
    return(INIT_SUCCEEDED);
@@ -102,6 +110,20 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
 {
+   // Cada 10 segundos, verificar si algún par aún necesita cargar su historial de 24h
+   datetime now = TimeCurrent();
+   if(now - g_last_history_check >= 10)
+   {
+      g_last_history_check = now;
+      for(int i = 0; i < 10; i++)
+      {
+         if(!g_pair_seeded[i])
+         {
+            LoadHistoryCSV(OTC_PAIRS[i]);
+         }
+      }
+   }
+
    ReadLocalLiveTicks();
 }
 
@@ -136,52 +158,49 @@ void CreateCustomOTCSymbols()
 }
 
 //+------------------------------------------------------------------+
-//| Carga historial de velas M1 desde el archivo local en FILE_COMMON|
+//| Carga historial de 24 horas (1,440 velas M1) desde CSV local     |
 //+------------------------------------------------------------------+
-void SeedHistoryFromLocalFile(string sym)
+bool LoadHistoryCSV(string sym)
 {
-   string filename = "otc_history_" + sym + ".json";
-   int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_COMMON);
+   string filename = "otc_history_" + sym + ".csv";
+   int handle = FileOpen(filename, FILE_READ | FILE_CSV | FILE_ANSI | FILE_COMMON, ',');
    if(handle == INVALID_HANDLE)
    {
-      return;
+      return false;
    }
-
-   string json = "";
-   while(!FileIsEnding(handle))
-   {
-      json += FileReadString(handle);
-   }
-   FileClose(handle);
-
-   int cPos = StringFind(json, "\"candles\":[");
-   if(cPos < 0) return;
-
-   int endArr = StringFind(json, "]", cPos);
-   if(endArr < 0) return;
-
-   string arrStr = StringSubstr(json, cPos, endArr - cPos + 1);
 
    MqlRates rates[];
-   ArrayResize(rates, 1000);
+   ArrayResize(rates, 2000);
    int ratesCount = 0;
-   int curIdx = 0;
 
-   while(ratesCount < 1000)
+   // Leer primera columna para verificar cabecera
+   string col1 = FileReadString(handle);
+   if(col1 == "time" || StringFind(col1, "time") >= 0)
    {
-      int objStart = StringFind(arrStr, "{", curIdx);
-      if(objStart < 0) break;
-      int objEnd = StringFind(arrStr, "}", objStart);
-      if(objEnd < 0) break;
+      // Saltar el resto de la cabecera (5 columnas restantes)
+      for(int k = 0; k < 5; k++) FileReadString(handle);
+   }
+   else
+   {
+      // La primera celda ya es un timestamp
+      FileSeek(handle, 0, SEEK_SET);
+   }
 
-      string obj = StringSubstr(arrStr, objStart, objEnd - objStart + 1);
+   while(!FileIsEnding(handle) && ratesCount < 2000)
+   {
+      string sTime  = FileReadString(handle);
+      string sOpen  = FileReadString(handle);
+      string sHigh  = FileReadString(handle);
+      string sLow   = FileReadString(handle);
+      string sClose = FileReadString(handle);
+      string sVol   = FileReadString(handle);
 
-      datetime c_time = (datetime)ExtractDoubleValue(obj, 0, "\"time\":");
-      double c_open   = ExtractDoubleValue(obj, 0, "\"open\":");
-      double c_high   = ExtractDoubleValue(obj, 0, "\"high\":");
-      double c_low    = ExtractDoubleValue(obj, 0, "\"low\":");
-      double c_close  = ExtractDoubleValue(obj, 0, "\"close\":");
-      long   c_vol    = (long)ExtractDoubleValue(obj, 0, "\"vol\":");
+      datetime c_time = (datetime)StringToInteger(sTime);
+      double c_open   = StringToDouble(sOpen);
+      double c_high   = StringToDouble(sHigh);
+      double c_low    = StringToDouble(sLow);
+      double c_close  = StringToDouble(sClose);
+      long c_vol      = (long)StringToInteger(sVol);
 
       if(c_time > 0 && c_open > 0)
       {
@@ -190,22 +209,40 @@ void SeedHistoryFromLocalFile(string sym)
          rates[ratesCount].high = c_high;
          rates[ratesCount].low  = c_low;
          rates[ratesCount].close = c_close;
-         rates[ratesCount].tick_volume = (c_vol > 0) ? c_vol : 20;
+         rates[ratesCount].tick_volume = (c_vol > 0) ? c_vol : 25;
          rates[ratesCount].spread = 10;
          rates[ratesCount].real_volume = 0;
          ratesCount++;
       }
-      curIdx = objEnd + 1;
    }
+   FileClose(handle);
 
    if(ratesCount > 0)
    {
       ArrayResize(rates, ratesCount);
-      int updated = CustomRatesUpdate(sym, rates, ratesCount);
-      Print("✅ ", sym, ": ", updated, " velas históricas M1 inyectadas desde archivo local.");
+
+      // Inyectar en MT5 Custom Symbol
+      int res = CustomRatesReplace(sym, rates[0].time, rates[ratesCount - 1].time, rates, ratesCount);
+      if(res < 0)
+      {
+         res = CustomRatesUpdate(sym, rates, ratesCount);
+      }
+
       int idx = GetPairIndex(sym);
       if(idx >= 0) g_pair_seeded[idx] = true;
+
+      Print("✅ ", sym, ": ", ratesCount, " velas M1 de las últimas 24h cargadas con éxito.");
+
+      // Si es el par del gráfico activo, refrescar vista inmediatamente
+      if(sym == _Symbol)
+      {
+         ChartSetSymbolPeriod(0, _Symbol, _Period);
+         ChartNavigate(0, CHART_END, 0);
+         ChartRedraw(0);
+      }
+      return true;
    }
+   return false;
 }
 
 //+------------------------------------------------------------------+
@@ -253,7 +290,7 @@ void ReadLocalLiveTicks()
          double final_ask = (ask > 0) ? ask : (bid + spread);
          double final_last = (last > 0) ? last : bid;
 
-         // Asegurar time_msc estrictamente ascendente (regla estricta MT5)
+         // Asegurar time_msc estrictamente ascendente (regla MT5)
          long tick_msc = global_msc;
          if(tick_msc <= g_last_tick_msc[i])
             tick_msc = g_last_tick_msc[i] + 1;
@@ -321,9 +358,9 @@ void ReadLocalLiveTicks()
       ChartRedraw(0);
    }
 
-   if(g_ticks_count % 25 == 0)
+   if(g_ticks_count % 30 == 0)
    {
-      DrawHUD("🟢 PUENTE LOCAL ACTIVO", clrSpringGreen, "Ticks locales: " + IntegerToString(g_ticks_count));
+      DrawHUD("🟢 PUENTE LOCAL ACTIVO", clrSpringGreen, "Ticks recibidos: " + IntegerToString(g_ticks_count));
    }
 }
 
@@ -360,17 +397,17 @@ void DrawHUD(string statusText, color statusColor, string subtitle)
       ObjectCreate(0, prefix + "BG", OBJ_RECTANGLE_LABEL, 0, 0, 0);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_XDISTANCE, 20);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_YDISTANCE, 30);
-      ObjectSetInteger(0, prefix + "BG", OBJPROP_XSIZE, 300);
+      ObjectSetInteger(0, prefix + "BG", OBJPROP_XSIZE, 310);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_YSIZE, 110);
       ObjectSetInteger(0, prefix + "BG", OBJPROP_BGCOLOR, C'12,18,28');
       ObjectSetInteger(0, prefix + "BG", OBJPROP_BORDER_COLOR, C'0,210,255');
       ObjectSetInteger(0, prefix + "BG", OBJPROP_CORNER, CORNER_LEFT_UPPER);
    }
 
-   CreateOrUpdateLabel(prefix + "T1", 35, 42, "TRADER 4 LESS - PUENTE LOCAL MT5", clrWhite, 9, true);
+   CreateOrUpdateLabel(prefix + "T1", 35, 42, "TRADER 4 LESS - PUENTE LOCAL 24H", clrWhite, 9, true);
    CreateOrUpdateLabel(prefix + "T2", 35, 62, statusText, statusColor, 10, true);
    CreateOrUpdateLabel(prefix + "T3", 35, 84, subtitle, C'142,155,176', 8, false);
-   CreateOrUpdateLabel(prefix + "T4", 35, 104, "Pares: 10 OTC activos en vivo", clrDodgerBlue, 8, false);
+   CreateOrUpdateLabel(prefix + "T4", 35, 104, "Historial: 24 Horas (1,440 Velas M1)", clrDodgerBlue, 8, false);
 
    ChartRedraw(0);
 }

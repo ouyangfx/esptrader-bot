@@ -95,9 +95,12 @@ class TelegramNotifier:
         elif result == "LOSS":
             status_text = "❌ <b>OPERACIÓN PERDIDA (OTM)</b> 📉"
             p_text = f"-${abs(profit):.2f}"
-        else:
+        elif result in ("EQUAL", "DOJI"):
             status_text = "⚪ <b>OPERACIÓN EMPATADA (DOJI)</b> ⚖️"
             p_text = "$0.00"
+        else:
+            status_text = f"ℹ️ <b>RESULTADO: {result}</b>"
+            p_text = f"${profit:.2f}"
 
         stats_str = ""
         if stats:

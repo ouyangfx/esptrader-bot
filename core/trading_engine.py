@@ -470,30 +470,69 @@ class TradingEngine:
                 await asyncio.sleep(1.5)
 
                 order_id = cur_trade["id"]
+                trade_amount = cur_trade["amount"]
+                entry_price = cur_trade["entry_price"]
+
+                # 1. Obtener velas recientes para determinar el precio de cierre exacto
+                fresh_candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 5)
+                close_price = None
+                if fresh_candles and len(fresh_candles) >= 2:
+                    if fresh_candles[-1].get('from', 0) >= cur_trade["end_ts"]:
+                        close_price = fresh_candles[-2].get('close')
+                    else:
+                        close_price = fresh_candles[-1].get('close')
+                elif fresh_candles:
+                    close_price = fresh_candles[-1].get('close')
+
+                if close_price is None or close_price <= 0:
+                    close_price = self.current_tick_price if self.current_tick_price else entry_price
+
+                # 2. Consultar al broker vía websocket
                 result, profit, _, _ = await asyncio.to_thread(self.iq.check_result, order_id)
                 close_time_str = datetime.fromtimestamp(self.iq.get_server_timestamp()).strftime("%H:%M:%S")
 
-                fresh_candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 5)
-                close_price = fresh_candles[-1]['close'] if fresh_candles else self.current_tick_price
-                entry_price = cur_trade["entry_price"]
+                # 3. Fallback matemático preciso si el broker no devolvió un resultado concluyente
+                if result not in ("WIN", "LOSS", "EQUAL"):
+                    logger.info(f"Liquidando resultado matemático para {pair} {trade_dir} (Entrada: {entry_price}, Cierre: {close_price})")
+                    diff = close_price - entry_price
+                    if abs(diff) < 1e-6:
+                        result = "EQUAL"
+                        profit = 0.0
+                    elif trade_dir == "CALL":
+                        if diff > 0:
+                            result = "WIN"
+                            profit = round(trade_amount * 0.85, 2)
+                        else:
+                            result = "LOSS"
+                            profit = round(-trade_amount, 2)
+                    elif trade_dir == "PUT":
+                        if diff < 0:
+                            result = "WIN"
+                            profit = round(trade_amount * 0.85, 2)
+                        else:
+                            result = "LOSS"
+                            profit = round(-trade_amount, 2)
+                else:
+                    # Garantizar coherencia en los importes de profit
+                    if result == "WIN" and profit <= 0:
+                        profit = round(trade_amount * 0.85, 2)
+                    elif result == "LOSS" and profit >= 0:
+                        profit = round(-trade_amount, 2)
+                    elif result == "EQUAL":
+                        profit = 0.0
 
+                # 4. Actualización rigurosa de estadísticas de sesión
                 if result == "WIN":
                     self.session_stats["wins"] += 1
                     self.session_stats["net_profit"] += profit
-                    self.current_amount = self.base_amount
-                    self.current_martingale_step = 0
                 elif result == "LOSS":
                     self.session_stats["losses"] += 1
-                    lost_amount = cur_trade["amount"]
-                    self.session_stats["net_profit"] -= lost_amount
-                    profit = -lost_amount
-                    # Operativa fija: NO existe martingala, siempre monto base
-                    self.current_amount = self.base_amount
-                    self.current_martingale_step = 0
+                    self.session_stats["net_profit"] += profit
                 else:
                     self.session_stats["equals"] += 1
-                    self.current_amount = self.base_amount
-                    self.current_martingale_step = 0
+
+                self.current_amount = self.base_amount
+                self.current_martingale_step = 0
 
                 self.session_stats["total_trades"] += 1
                 tot = self.session_stats["wins"] + self.session_stats["losses"]
@@ -510,7 +549,7 @@ class TradingEngine:
                     "close_time": close_time_str,
                     "entry_price": entry_price,
                     "close_price": close_price,
-                    "amount": cur_trade["amount"],
+                    "amount": trade_amount,
                     "martingale_step": 0
                 }
                 self.trade_history.append(trade_record)

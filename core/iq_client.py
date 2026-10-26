@@ -262,36 +262,52 @@ class IQOptionClient:
             logger.error(f"Excepción en buy_option: {e}")
             return False, None, str(e)
 
-    def check_result(self, order_id: int, timeout: int = 70) -> Tuple[str, float, float, float]:
+    def check_result(self, order_id: int, timeout: int = 8) -> Tuple[str, float, float, float]:
         """
         Espera y retorna (resultado, profit, precio_apertura, precio_cierre)
-        resultado: 'WIN', 'LOSS', 'EQUAL'
+        resultado: 'WIN', 'LOSS', 'EQUAL' o 'UNKNOWN'
         """
         if self.is_simulation or not self.api:
-            # En simulación esperamos el tiempo y simulamos resultado
             return "WIN" if random.random() > 0.35 else "LOSS", 1.74, 1.08500, 1.08520
 
-        try:
-            result = self.api.check_win_v4(order_id)
-            # check_win_v4 retorna: win/loose/equal, profit
-            if isinstance(result, tuple) or isinstance(result, list):
-                status_raw = str(result[0]).lower()
-                profit = float(result[1]) if len(result) > 1 else 0.0
-            else:
-                profit = float(result) if result is not None else 0.0
-                status_raw = "win" if profit > 0 else ("loose" if profit < 0 else "equal")
+        # Monitorear respuestas websocket del broker durante 'timeout' segundos sin bloquear
+        start_t = time.time()
+        while time.time() - start_t < timeout:
+            try:
+                # 1. order_async (streaming en vivo de option-closed)
+                if hasattr(self.api, "order_async") and order_id in self.api.order_async:
+                    ord_info = self.api.order_async.get(order_id, {})
+                    if ord_info and "option-closed" in ord_info and ord_info["option-closed"]:
+                        msg = ord_info["option-closed"].get("msg", {})
+                        win_state = str(msg.get("win", "")).lower()
+                        profit_amount = float(msg.get("profit_amount", 0.0))
+                        bet_amount = float(msg.get("amount", 0.0))
+                        net_profit = profit_amount - bet_amount
+                        if win_state == "win" or net_profit > 0:
+                            return "WIN", round(net_profit, 2), 0.0, 0.0
+                        elif win_state in ("loose", "loss") or net_profit < 0:
+                            return "LOSS", round(-bet_amount, 2), 0.0, 0.0
+                        elif win_state == "equal":
+                            return "EQUAL", 0.0, 0.0, 0.0
 
-            if "win" in status_raw or profit > 0:
-                res = "WIN"
-            elif "loose" in status_raw or "loss" in status_raw or profit < 0:
-                res = "LOSS"
-            else:
-                res = "EQUAL"
+                # 2. listinfodata (streaming en vivo de listInfoData sin bucle infinito)
+                if hasattr(self.api, "listinfodata") and hasattr(self.api.listinfodata, "listinfodata_dict"):
+                    info = self.api.listinfodata.listinfodata_dict.get(order_id)
+                    if info and info.get("game_state") == 1:
+                        win_str = str(info.get("win", "")).lower()
+                        if "win" in win_str:
+                            return "WIN", 0.0, 0.0, 0.0
+                        elif "loose" in win_str or "loss" in win_str:
+                            return "LOSS", 0.0, 0.0, 0.0
+                        elif "equal" in win_str:
+                            return "EQUAL", 0.0, 0.0, 0.0
+            except Exception as e:
+                logger.debug(f"Error verificando resultado en websocket: {e}")
 
-            return res, profit, 0.0, 0.0
-        except Exception as e:
-            logger.error(f"Error verificando resultado ID {order_id}: {e}")
-            return "UNKNOWN", 0.0, 0.0, 0.0
+            time.sleep(0.5)
+
+        logger.info(f"El broker aún no liquidó vía websocket el trade ID {order_id}. Se procederá a verificación matemática por velas.")
+        return "UNKNOWN", 0.0, 0.0, 0.0
 
     def _generate_simulated_candles(self, active: str, timeframe: int, count: int) -> List[Dict]:
         """Generador determinista/aleatorio de velas para pruebas realistas."""

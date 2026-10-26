@@ -363,7 +363,8 @@ class TradingEngine:
                             "detected_at": time_str,
                             "candle_time": candle_dt_str,
                             "signal_candle_from": closed_candle_time,
-                            "confirm_candle_from": candles[-1].get('from', 0)
+                            "confirm_candle_from": candles[-1].get('from', 0),
+                            "signal_candle": closed_candle
                         }
 
                         tf_label = "5M"
@@ -411,7 +412,28 @@ class TradingEngine:
                         entry_time_str = datetime.fromtimestamp(server_ts + 1).strftime("%H:%M:%S")
                         trade_amount = self.current_amount
 
-                        logger.info(f"¡Vela confirmada! Ejecutando {direction} en {pair} a las {entry_time_str}")
+                        # Calcular niveles de Fibonacci (50% y 61.8%) uniendo las mechas de ambas velas M5
+                        signal_candle = self.pending_signal.get("signal_candle", {})
+                        sig_min = float(signal_candle.get('min', signal_candle.get('low', signal_candle.get('close', c_open))))
+                        sig_max = float(signal_candle.get('max', signal_candle.get('high', signal_candle.get('close', c_open))))
+                        conf_min = float(confirm_candle.get('min', confirm_candle.get('low', confirm_candle.get('close', c_close))))
+                        conf_max = float(confirm_candle.get('max', confirm_candle.get('high', confirm_candle.get('close', c_close))))
+
+                        overall_min = min(sig_min, conf_min)
+                        overall_max = max(sig_max, conf_max)
+                        fibo_range = max(1e-5, overall_max - overall_min)
+
+                        if direction == "CALL":
+                            fibo_50 = overall_max - (fibo_range * 0.50)
+                            fibo_618 = overall_max - (fibo_range * 0.618)
+                        else:  # PUT
+                            fibo_50 = overall_min + (fibo_range * 0.50)
+                            fibo_618 = overall_min + (fibo_range * 0.618)
+
+                        expire_ts = server_ts + (self.expiration * 60)
+                        expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
+
+                        logger.info(f"¡Vela confirmada! {direction} en {pair}. Fibo 50%: {fibo_50:.5f}, Fibo 61.8%: {fibo_618:.5f}. Ejecutando a las {entry_time_str}")
                         ok, order_id, msg = await asyncio.to_thread(self.iq.buy_option, pair, trade_amount, direction, self.expiration)
 
                         if ok:
@@ -424,10 +446,10 @@ class TradingEngine:
                                 "amount": trade_amount,
                                 "expiration": self.expiration,
                                 "start_ts": server_ts,
-                                "end_ts": server_ts + (self.expiration * 60)
+                                "end_ts": expire_ts
                             }
                             self.engine_mode = "IN_TRADE"
-                            self.current_status_message = f"OPERACIÓN EN CURSO (5M): {pair} {direction} ${trade_amount} (Expiración 5 Minutos)"
+                            self.current_status_message = f"OPERACIÓN EN CURSO (5M): {pair} {direction} ${trade_amount} (Cierre: {expire_time_str})"
                             
                             self.telegram.notify_entry(
                                 pair=pair,
@@ -435,7 +457,10 @@ class TradingEngine:
                                 entry_time=entry_time_str,
                                 entry_price=c_close,
                                 expiration=self.expiration,
-                                amount=trade_amount
+                                amount=trade_amount,
+                                fibo_50=fibo_50,
+                                fibo_618=fibo_618,
+                                expire_time=expire_time_str
                             )
                         else:
                             logger.error(f"Error al enviar orden en {pair}: {msg}")

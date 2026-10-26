@@ -51,10 +51,10 @@ class TelegramNotifier:
             f"⚡ <b>¡ALERTA DE SEÑAL DETECTADA!</b> ⚡\n\n"
             f"📊 <b>Par:</b> <code>{pair}</code>\n"
             f"📈 <b>Dirección:</b> {icon} <b>{action}</b>\n"
-            f"⏱ <b>Timeframe Análisis:</b> {timeframe_str}\n"
-            f"🕐 <b>Hora Señal:</b> {candle_time}\n\n"
+            f"⏱ <b>Timeframe:</b> {timeframe_str} (Vela de Señal)\n"
+            f"🕐 <b>Hora Señal:</b> <code>{candle_time}</code>\n\n"
             f"⏳ <b>Estado:</b> <i>Esperando vela de confirmación a favor...</i>\n"
-            f"⚠️ <i>No entrar aún. Monitoreando ticks segundo a segundo.</i>\n\n"
+            f"📏 <i>Al confirmar, trazaremos Fibonacci (50% y 61.8%) uniendo las mechas de ambas velas.</i>\n\n"
             f"🤖 <b>Canal Oficial:</b> @traderfxapp | Admin: @{self.admin_user}"
         )
         return self.send_message(msg)
@@ -65,23 +65,39 @@ class TelegramNotifier:
             f"🚫 <b>SEÑAL DESCARTADA / CANCELADA</b> 🚫\n\n"
             f"📊 <b>Par:</b> <code>{pair}</code> ({direction})\n"
             f"❌ <b>Motivo:</b> {reason} (la vela no confirmó el movimiento).\n"
-            f"🛡 <b>Protección de capital activada:</b> Operación evitada.\n\n"
+            f"🛡 <b>Protección de capital:</b> Operación evitada.\n\n"
             f"📡 <i>Continuando escaneo del mercado...</i>"
         )
         return self.send_message(msg)
 
-    def notify_entry(self, pair: str, direction: str, entry_time: str, entry_price: float, expiration: int = 5, amount: float = 0.0):
-        """Notificación en el segundo 00 al ejecutar la operación confirmada"""
+    def notify_entry(self, pair: str, direction: str, entry_time: str, entry_price: float, expiration: int = 5, amount: float = 0.0,
+                     fibo_50: float = None, fibo_618: float = None, expire_time: str = None):
+        """Notificación en el segundo 00 al ejecutar la operación confirmada con niveles de retroceso Fibo"""
         icon = "🟢 COMPRA (CALL)" if direction == "CALL" else "🔴 VENTA (PUT)"
+
+        fibo_section = ""
+        if fibo_50 is not None and fibo_618 is not None:
+            fibo_section = (
+                f"\n🎯 <b>ZONA DE RETROCESO FIBONACCI (Sniper Entry):</b>\n"
+                f"• Fibo 50.0%: <code>{fibo_50:.5f}</code>\n"
+                f"• Fibo 61.8%: <code>{fibo_618:.5f}</code>\n"
+                f"💡 <i>Tip Pro: Esperar retroceso a la zona 50% - 61.8% para entrar con mejor precio y ventaja.</i>\n"
+            )
+
+        exp_line = f"<b>{expiration} Minutos (M5)</b>"
+        if expire_time:
+            exp_line += f" (🏁 Cierre: <code>{expire_time}</code>)"
+
         msg = (
-            f"🚀 <b>¡OPERACIÓN CONFIRMADA - ENTRADA EJECUTADA!</b> 🚀\n\n"
+            f"🚀 <b>¡OPERACIÓN CONFIRMADA - ENTRADA M5!</b> 🚀\n\n"
             f"📊 <b>Activo:</b> <code>{pair}</code>\n"
             f"🎯 <b>Acción:</b> <b>{icon}</b>\n"
-            f"⏰ <b>Hora Entrada:</b> <code>{entry_time}</code> (Segundo 00)\n"
-            f"⏳ <b>Expiración:</b> <b>{expiration} Minutos (M5)</b>\n"
-            f"💵 <b>Precio Entrada:</b> <code>{entry_price:.5f}</code>\n"
-            f"💰 <b>Importe Fijo:</b> <code>${amount:.2f}</code> (Sin Martingala)\n\n"
-            f"⏱ <i>Monitoreando segundo a segundo hasta el cierre de la vela M5...</i>\n"
+            f"⏰ <b>Hora Entrada:</b> <code>{entry_time}</code> (Apertura Vela)\n"
+            f"⏳ <b>Expiración:</b> {exp_line}\n"
+            f"💵 <b>Precio Apertura:</b> <code>{entry_price:.5f}</code>\n"
+            f"💰 <b>Importe Fijo:</b> <code>${amount:.2f}</code> (Sin Martingala)\n"
+            f"{fibo_section}\n"
+            f"⚠️ <b>Regla de Oro:</b> La expiración SIEMPRE es al término de la vela de 5M (<code>{expire_time or 'al cierre de vela'}</code>).\n\n"
             f"🤖 <b>Trader 4 Less</b> | @traderfxapp"
         )
         return self.send_message(msg)

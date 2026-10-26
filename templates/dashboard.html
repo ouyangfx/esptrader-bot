@@ -388,6 +388,78 @@
       </section>
     </div>
 
+    <!-- GESTOR DE LICENCIAS MT5 (DATA OTC & INDICADORES) -->
+    <section class="card glow-panel licenses-card" style="margin-bottom: 24px;">
+      <div class="card-header">
+        <div class="header-title">
+          <i class="fa-solid fa-key" style="color: #f1c40f;"></i>
+          <h3>Gestor de Licencias MT5 (Data OTC & Indicadores)</h3>
+        </div>
+        <button type="button" class="btn-quick-pair" id="btn-toggle-new-lic" style="background: rgba(0, 245, 155, 0.15); border-color: rgba(0, 245, 155, 0.4); color: #00f59b;">
+          <i class="fa-solid fa-plus"></i> Crear Nueva Licencia
+        </button>
+      </div>
+
+      <!-- FORMULARIO CREAR LICENCIA (TOGGLE) -->
+      <div id="new-license-box" style="display: none; background: rgba(10, 15, 26, 0.7); border: 1px solid rgba(0, 245, 155, 0.2); border-radius: 12px; padding: 18px; margin-bottom: 18px;">
+        <h4 style="font-size: 0.95rem; margin-bottom: 12px; color: #fff;">Crear Acceso Autorizado MT5</h4>
+        <form id="form-create-license">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px;">
+            <div class="iq-form-group">
+              <label><i class="fa-solid fa-user"></i> Nombre del Cliente</label>
+              <input type="text" id="lic-client" class="form-input" placeholder="Ej. Carlos Mendoza / @carlosfx" required>
+            </div>
+            <div class="iq-form-group">
+              <label><i class="fa-solid fa-hashtag"></i> Cuenta MT5 (Opcional)</label>
+              <input type="text" id="lic-account" class="form-input" placeholder="Vacío = Vincula en primer uso">
+            </div>
+            <div class="iq-form-group">
+              <label><i class="fa-solid fa-calendar-days"></i> Validez</label>
+              <select id="lic-days" class="form-select">
+                <option value="30">30 Días (Mensual)</option>
+                <option value="90">90 Días (Trimestral)</option>
+                <option value="180">180 Días (Semestral)</option>
+                <option value="365" selected>365 Días (Anual)</option>
+                <option value="3650">Vitalicia (10 Años)</option>
+              </select>
+            </div>
+            <div class="iq-form-group">
+              <label><i class="fa-solid fa-note-sticky"></i> Notas / Referencia</label>
+              <input type="text" id="lic-notes" class="form-input" placeholder="Ej. Pago confirmado Telegram">
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button type="submit" class="btn-save glow-button" style="padding: 9px 20px;">
+              <i class="fa-solid fa-check"></i> Generar Licencia
+            </button>
+            <button type="button" id="btn-cancel-lic" class="btn-quick-pair">Cancelar</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- TABLA DE LICENCIAS ACTIVAS -->
+      <div class="table-responsive">
+        <table class="table-trades">
+          <thead>
+            <tr>
+              <th>Clave de Licencia</th>
+              <th>Cliente</th>
+              <th>Cuenta MT5</th>
+              <th>Vencimiento</th>
+              <th>Última Conexión</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="licenses-tbody">
+            <tr>
+              <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Cargando licencias...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- CONSOLE LOG TERMINAL -->
     <section class="card terminal-card glow-panel">
       <div class="card-header">

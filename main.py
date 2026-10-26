@@ -14,6 +14,7 @@ from config import Config
 from core.iq_client import IQOptionClient
 from core.telegram_bot import TelegramNotifier
 from core.trading_engine import TradingEngine
+from core.license_manager import LicenseManager
 from web.routes import router
 
 # Configuración de Logging
@@ -37,6 +38,7 @@ telegram = TelegramNotifier(
     admin_user=config.TELEGRAM_ADMIN_USER
 )
 engine = TradingEngine(config=config, iq_client=iq_client, telegram=telegram)
+license_manager = LicenseManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,6 +67,7 @@ app.state.config = config
 app.state.iq_client = iq_client
 app.state.telegram = telegram
 app.state.engine = engine
+app.state.license_manager = license_manager
 
 # Archivos estáticos y rutas
 app.mount("/static", StaticFiles(directory="static"), name="static")

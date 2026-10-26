@@ -548,5 +548,179 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ==========================================
+  // GESTIÓN DE LICENCIAS MT5
+  // ==========================================
+  const btnToggleNewLic = document.getElementById('btn-toggle-new-lic');
+  const newLicBox = document.getElementById('new-license-box');
+  const btnCancelLic = document.getElementById('btn-cancel-lic');
+  const formCreateLic = document.getElementById('form-create-license');
+  const licClient = document.getElementById('lic-client');
+  const licAccount = document.getElementById('lic-account');
+  const licDays = document.getElementById('lic-days');
+  const licNotes = document.getElementById('lic-notes');
+  const licensesTbody = document.getElementById('licenses-tbody');
+
+  if (btnToggleNewLic && newLicBox) {
+    btnToggleNewLic.addEventListener('click', () => {
+      newLicBox.style.display = newLicBox.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+
+  if (btnCancelLic && newLicBox) {
+    btnCancelLic.addEventListener('click', () => {
+      newLicBox.style.display = 'none';
+    });
+  }
+
+  if (formCreateLic) {
+    formCreateLic.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const resp = await fetch('/api/licenses/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_name: licClient.value.trim(),
+            account_mt5: licAccount.value.trim(),
+            days_valid: parseInt(licDays.value),
+            notes: licNotes.value.trim()
+          })
+        });
+        const data = await resp.json();
+        if (data.success) {
+          logToTerminal(`Nueva licencia creada: ${data.license.license_key}`, 'success');
+          licClient.value = '';
+          licAccount.value = '';
+          licNotes.value = '';
+          newLicBox.style.display = 'none';
+          loadLicenses();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  }
+
+  async function loadLicenses() {
+    if (!licensesTbody) return;
+    try {
+      const res = await fetch('/api/licenses');
+      const data = await res.json();
+      if (data.success && data.licenses) {
+        renderLicensesTable(data.licenses);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function renderLicensesTable(licenses) {
+    if (!licensesTbody) return;
+    if (!licenses || licenses.length === 0) {
+      licensesTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">No hay licencias creadas aún.</td></tr>`;
+      return;
+    }
+
+    let rows = '';
+    licenses.forEach(lic => {
+      const isAct = lic.status === 'ACTIVA';
+      const stBadge = isAct ? 
+        `<span style="background: rgba(0,245,155,0.15); color: #00f59b; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">ACTIVA</span>` :
+        `<span style="background: rgba(255,71,87,0.15); color: #ff4757; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">${lic.status}</span>`;
+
+      rows += `
+        <tr>
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <code style="font-size: 0.82rem; font-weight: 700; color: #00d2ff;">${lic.license_key}</code>
+              <button onclick="copyToClipboard('${lic.license_key}')" class="btn-clear" style="padding: 2px 6px;" title="Copiar"><i class="fa-solid fa-copy"></i></button>
+            </div>
+          </td>
+          <td><strong>${lic.client_name}</strong></td>
+          <td>${lic.account_mt5 || '<em style="color:#8e9bb0;">Cualquiera</em>'}</td>
+          <td>${lic.expires_at.split(' ')[0]}</td>
+          <td>${lic.last_used_at || '<em style="color:#8e9bb0;">Sin uso</em>'}</td>
+          <td>${stBadge}</td>
+          <td>
+            <div style="display: flex; gap: 6px;">
+              <button onclick="toggleLicStatus(${lic.id})" class="btn-quick-pair" style="padding: 3px 8px; font-size: 0.7rem;" title="${isAct ? 'Suspender' : 'Activar'}">
+                <i class="fa-solid ${isAct ? 'fa-pause' : 'fa-play'}"></i>
+              </button>
+              <button onclick="extendLic(${lic.id})" class="btn-quick-pair" style="padding: 3px 8px; font-size: 0.7rem;" title="+30 Días">
+                +30d
+              </button>
+              <button onclick="deleteLic(${lic.id})" class="btn-quick-pair btn-clear-pairs" style="padding: 3px 8px; font-size: 0.7rem;" title="Eliminar">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+    licensesTbody.innerHTML = rows;
+  }
+
+  window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      logToTerminal(`Clave copiada al portapapeles: ${text}`, 'info');
+    });
+  };
+
+  window.toggleLicStatus = async function(id) {
+    try {
+      const res = await fetch('/api/licenses/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadLicenses();
+        logToTerminal(`Estado de licencia actualizado a: ${data.status}`, 'info');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  window.extendLic = async function(id) {
+    try {
+      const res = await fetch('/api/licenses/extend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, days: 30 })
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadLicenses();
+        logToTerminal(`Licencia extendida 30 días hasta: ${data.expires_at}`, 'success');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  window.deleteLic = async function(id) {
+    if (!confirm("¿Seguro que deseas eliminar esta licencia?")) return;
+    try {
+      const res = await fetch('/api/licenses/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadLicenses();
+        logToTerminal(`Licencia eliminada.`, 'warn');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Cargar licencias al inicio
+  loadLicenses();
+
   connectWebSocket();
 });

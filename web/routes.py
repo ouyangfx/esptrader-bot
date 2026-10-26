@@ -271,9 +271,9 @@ async def api_mt5_validate_license(request: Request, license_key: Optional[str] 
     }
 
 @router.get("/api/mt5/feed/otc")
-async def api_mt5_otc_feed(request: Request, license_key: str, symbol: Optional[str] = None):
+async def api_mt5_otc_feed(request: Request, license_key: str, symbol: Optional[str] = None, include_candles: Optional[bool] = False):
     """
-    Entrega data en tiempo real y velas M1/M30 para MetaTrader 5 de los 10 pares OTC.
+    Entrega data en tiempo real de alta velocidad y velas M1/M30 para MetaTrader 5 de los 10 pares OTC.
     Requiere licencia activa y no expirada.
     """
     lic_mgr = request.app.state.license_manager
@@ -287,9 +287,7 @@ async def api_mt5_otc_feed(request: Request, license_key: str, symbol: Optional[
     iq = request.app.state.iq_client
     server_ts = iq.get_server_timestamp()
 
-    # Mapeo invertido: EURUSD_OTC -> EURUSD-OTC
     inv_map = {v: k for k, v in OTC_SYMBOLS_MAP.items()}
-    
     if symbol and symbol.upper() in inv_map:
         targets = [inv_map[symbol.upper()]]
     else:
@@ -298,45 +296,40 @@ async def api_mt5_otc_feed(request: Request, license_key: str, symbol: Optional[
     feed_data = {}
     for iq_pair in targets:
         mt5_sym = OTC_SYMBOLS_MAP.get(iq_pair, iq_pair)
-        # Precio actual tick
         price = iq.get_realtime_price(iq_pair, 60)
         spread = 0.02 if "JPY" in iq_pair else 0.0001
         
-        # Velas recientes M1 (últimas 25 velas para actualización rápida)
-        m1_raw = iq.get_candles(iq_pair, 60, 25)
-        m1_candles = []
-        for c in m1_raw:
-            m1_candles.append({
+        pair_dict = {
+            "symbol": mt5_sym,
+            "bid": round(price, 5 if "JPY" not in iq_pair else 3),
+            "ask": round(price + spread, 5 if "JPY" not in iq_pair else 3),
+            "last": round(price, 5 if "JPY" not in iq_pair else 3),
+            "time": server_ts
+        }
+
+        # Solo incluir velas completas si se solicita explícitamente (ej. carga inicial)
+        if include_candles:
+            m1_raw = iq.get_candles(iq_pair, 60, 20)
+            pair_dict["m1_candles"] = [{
                 "time": int(c["from"]),
                 "open": float(c["open"]),
                 "high": float(c["max"]),
                 "low": float(c["min"]),
                 "close": float(c["close"]),
                 "vol": int(c.get("volume", 10))
-            })
+            } for c in m1_raw]
 
-        # Velas M30 para el indicador de réplicas (últimas 20 velas de 30m)
-        m30_raw = iq.get_candles(iq_pair, 1800, 20)
-        m30_candles = []
-        for c in m30_raw:
-            m30_candles.append({
+            m30_raw = iq.get_candles(iq_pair, 1800, 15)
+            pair_dict["m30_candles"] = [{
                 "time": int(c["from"]),
                 "open": float(c["open"]),
                 "high": float(c["max"]),
                 "low": float(c["min"]),
                 "close": float(c["close"]),
                 "vol": int(c.get("volume", 50))
-            })
+            } for c in m30_raw]
 
-        feed_data[mt5_sym] = {
-            "symbol": mt5_sym,
-            "bid": round(price, 5 if "JPY" not in iq_pair else 3),
-            "ask": round(price + spread, 5 if "JPY" not in iq_pair else 3),
-            "last": round(price, 5 if "JPY" not in iq_pair else 3),
-            "time": server_ts,
-            "m1_candles": m1_candles,
-            "m30_candles": m30_candles
-        }
+        feed_data[mt5_sym] = pair_dict
 
     return {
         "success": True,

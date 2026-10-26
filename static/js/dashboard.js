@@ -1,4 +1,4 @@
-// Dashboard JavaScript con WebSocket, Monitoreo Multi-Par y Test de Conexión IQ Option
+// Dashboard JavaScript con WebSocket, Monitoreo Multi-Par y Ticks Instantáneos al Microsegundo
 
 document.addEventListener('DOMContentLoaded', () => {
   // Elementos DOM
@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Radar Principal
   const radarPairEl = document.getElementById('radar-pair-tag');
   const radarPriceEl = document.getElementById('radar-price');
+  const radarTickTimeEl = document.getElementById('radar-tick-time');
   const radarCountdownEl = document.getElementById('radar-countdown');
   const countdownProgressEl = document.getElementById('countdown-progress');
   const cycleMsgEl = document.getElementById('cycle-msg');
@@ -61,6 +62,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let isBotRunning = false;
   let ws = null;
+  let previousPrices = {};
+  let previousMainPrice = 0.0;
+  let currentActiveTimeframe = 60;
 
   // Actualizar reloj local
   setInterval(() => {
@@ -122,7 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Inicializar UI de checkboxes
   updateCheckboxUI();
 
   chkPairs.forEach(chk => {
@@ -183,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnTestIqText.textContent = 'Probando conexión...';
     iqStatusBadge.className = 'status-badge-iq';
     iqStatusBadge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Conectando con IQ Option...';
-
     iqTestResult.style.display = 'none';
 
     try {
@@ -229,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // WEBSOCKET REALTIME CONNECTION
+  // WEBSOCKET REALTIME STREAMING
   // ==========================================
   function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -238,21 +240,28 @@ document.addEventListener('DOMContentLoaded', () => {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      logToTerminal("Conexión WebSocket establecida con el motor del bot.", "success");
+      logToTerminal("Conexión WebSocket de alta frecuencia establecida.", "success");
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        updateDashboard(data);
+        if (data.type === 'tick') {
+          handleTickUpdate(data);
+        } else {
+          updateDashboard(data);
+          if (data.tick_price) {
+            handleTickUpdate(data);
+          }
+        }
       } catch (err) {
         console.error("Error al procesar mensaje WebSocket:", err);
       }
     };
 
     ws.onclose = () => {
-      logToTerminal("WebSocket desconectado. Reconectando en 3 segundos...", "warn");
-      setTimeout(connectWebSocket, 3000);
+      logToTerminal("WebSocket desconectado. Reconectando en 2 segundos...", "warn");
+      setTimeout(connectWebSocket, 2000);
     };
 
     ws.onerror = (err) => {
@@ -261,10 +270,72 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // ACTUALIZACIÓN DEL DASHBOARD EN VIVO
+  // MANEJADOR DE TICKS INSTANTÁNEOS (SUB-SEGUNDO)
+  // ==========================================
+  function handleTickUpdate(data) {
+    if (data.tick_price !== undefined) {
+      const curPrice = parseFloat(data.tick_price);
+      const dec = (data.pair && data.pair.includes('JPY')) ? 3 : 5;
+      radarPriceEl.textContent = curPrice.toFixed(dec);
+
+      if (previousMainPrice > 0) {
+        if (curPrice > previousMainPrice) {
+          radarPriceEl.className = 'radar-val price-val tick-up';
+        } else if (curPrice < previousMainPrice) {
+          radarPriceEl.className = 'radar-val price-val tick-down';
+        }
+        setTimeout(() => {
+          radarPriceEl.className = 'radar-val price-val';
+        }, 120);
+      }
+      previousMainPrice = curPrice;
+    }
+
+    if (data.time_ms) {
+      radarTickTimeEl.textContent = `Streaming en vivo: ${data.time_ms}`;
+    }
+
+    if (data.seconds_left !== undefined) {
+      radarCountdownEl.textContent = `${data.seconds_left}s`;
+      const tf = currentActiveTimeframe || 60;
+      const pct = Math.max(0, Math.min(100, (data.seconds_left / tf) * 100));
+      countdownProgressEl.style.width = `${pct}%`;
+    }
+
+    // Actualización rápida de precios en la cuadrícula de pares
+    if (data.prices) {
+      for (const [sym, pr] of Object.entries(data.prices)) {
+        const pVal = parseFloat(pr);
+        const dec = sym.includes('JPY') ? 3 : 5;
+        const card = document.querySelector(`.multi-pair-card[data-pair="${sym}"]`);
+        if (card) {
+          const prEl = card.querySelector('.mp-price');
+          if (prEl) {
+            prEl.textContent = pVal.toFixed(dec);
+            const prev = previousPrices[sym] || 0;
+            if (prev > 0) {
+              if (pVal > prev) {
+                prEl.className = 'mp-price tick-up';
+              } else if (pVal < prev) {
+                prEl.className = 'mp-price tick-down';
+              }
+              setTimeout(() => {
+                prEl.className = 'mp-price';
+              }, 120);
+            }
+            previousPrices[sym] = pVal;
+          }
+        }
+      }
+    }
+  }
+
+  // ==========================================
+  // ACTUALIZACIÓN COMPLETA DEL DASHBOARD
   // ==========================================
   function updateDashboard(data) {
     isBotRunning = data.is_running;
+    currentActiveTimeframe = data.timeframe || 60;
 
     // Estado del botón y Hero
     if (isBotRunning) {
@@ -293,14 +364,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Radar Principal
     const tfLabel = data.timeframe === 60 ? "1M" : `${Math.floor(data.timeframe / 60)}M`;
     radarPairEl.textContent = `${data.pair} • ${tfLabel}`;
-    radarPriceEl.textContent = (data.tick_price || 0).toFixed(5);
-    
-    // Cuenta regresiva
-    const sec = data.seconds_left || 0;
-    radarCountdownEl.textContent = `${sec}s`;
-    const tf = data.timeframe || 60;
-    const pct = Math.max(0, Math.min(100, (sec / tf) * 100));
-    countdownProgressEl.style.width = `${pct}%`;
 
     // Pasos del ciclo
     stepSearch.classList.remove('active');
@@ -325,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Renderizar Monitor Multi-Par
     if (data.pairs_overview && data.pairs_overview.length > 0) {
-      renderMultiPairsGrid(data.pairs_overview, sec);
+      renderMultiPairsGrid(data.pairs_overview, data.seconds_left || 0);
     }
 
     // Métricas de Sesión
@@ -394,13 +457,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const signalBadge = item.signal ? 
         `<span class="mp-signal-tag mp-signal-${item.signal.toLowerCase()}">${item.signal}</span>` : '';
 
+      const dec = item.pair.includes('JPY') ? 3 : 5;
+      const priceFormatted = (item.tick_price || 0).toFixed(dec);
+
       cardsHtml += `
-        <div class="${cardClass}" onclick="focusPair('${item.pair}')">
+        <div class="${cardClass}" data-pair="${item.pair}" onclick="focusPair('${item.pair}')">
           <div class="mp-card-top">
             <span class="mp-symbol">${item.pair}</span>
             <span class="mp-badge-state ${stateBadgeClass}">${stateText}</span>
           </div>
-          <div class="mp-price">${(item.tick_price || 0).toFixed(5)}</div>
+          <div class="mp-price">${priceFormatted}</div>
           <div class="mp-card-bottom">
             <span>${signalBadge} ${item.status_msg || ''}</span>
             <span>${secondsLeft}s</span>
@@ -411,7 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
     multiPairsGrid.innerHTML = cardsHtml;
   }
 
-  // Enfocar par al hacer clic en su tarjeta
   window.focusPair = async function(pair) {
     try {
       await fetch('/api/pairs/focus', {
@@ -429,7 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // BOT POWER SWITCH TOGGLE
   // ==========================================
   btnToggle.addEventListener('click', async () => {
-    // Si se va a encender el bot, validar que al menos 1 par esté seleccionado
     if (!isBotRunning) {
       const count = updateCheckboxUI();
       if (count === 0) {
@@ -484,6 +548,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Iniciar WebSocket
   connectWebSocket();
 });

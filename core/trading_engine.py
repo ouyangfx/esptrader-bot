@@ -4,11 +4,7 @@ Implementa la máquina de estados con análisis concurrente de hasta 20 pares:
 - 10 Pares Mercado Normal: EURUSD, GBPUSD, USDJPY, EURJPY, AUDUSD, USDCAD, USDCHF, EURGBP, NZDUSD, GBPJPY
 - 10 Pares Mercado OTC: EURUSD-OTC, GBPUSD-OTC, USDJPY-OTC, EURJPY-OTC, AUDUSD-OTC, USDCAD-OTC, USDCHF-OTC, NZDUSD-OTC, EURGBP-OTC, GBPJPY-OTC
 
-Máquina de estados por cada par:
-1. SEARCHING: Escaneo simultáneo de señales con SCRIPT VIP.
-2. CONFIRMING: Espera de la vela siguiente a favor de la señal con monitoreo segundo a segundo.
-3. IN_TRADE: Ejecución en el segundo 00 con expiración a 1m y monitoreo hasta el cierre.
-4. RESULT: Verificación de resultado (ITM/OTM), martingala y notificación.
+Actualización de precios instantánea al microsegundo / milisegundo mediante streaming de alta frecuencia (50ms).
 """
 
 import time
@@ -45,7 +41,6 @@ class TradingEngine:
         self.current_martingale_step = 0
         
         # Estados independientes por cada par seleccionado
-        # key: 'EURUSD' -> {'state': 'SEARCHING', 'pending_signal': ..., 'current_trade': ..., 'tick_price': 1.08, ...}
         self.pairs_state: Dict[str, Dict[str, Any]] = {}
         self._init_pair_states()
         
@@ -81,7 +76,6 @@ class TradingEngine:
                     "status_msg": "Buscando señal VIP...",
                     "seconds_left": 0
                 }
-        # Eliminar pares deseleccionados
         current_set = set(p.upper() for p in self.selected_pairs)
         to_del = [k for k in self.pairs_state if k not in current_set]
         for k in to_del:
@@ -98,6 +92,8 @@ class TradingEngine:
             self.active_pair = self.selected_pairs[0]
         
         self._init_pair_states()
+        if self.is_running:
+            self.iq.start_streams(self.selected_pairs, self.timeframe)
         logger.info(f"Pares actualizados para análisis simultáneo ({len(self.selected_pairs)}): {self.selected_pairs}")
         return True, f"Se han seleccionado {len(self.selected_pairs)} pares para análisis en simultáneo."
 
@@ -122,8 +118,11 @@ class TradingEngine:
         self.current_martingale_step = 0
         self._init_pair_states()
         
+        # Iniciar streaming de alta frecuencia en el broker
+        self.iq.start_streams(self.selected_pairs, self.timeframe)
+        
         pairs_count = len(self.selected_pairs)
-        self.current_status_message = f"Bot iniciado - Monitoreando {pairs_count} pares en simultáneo..."
+        self.current_status_message = f"Bot iniciado - Monitoreando {pairs_count} pares en simultáneo (Ticks instantáneos)..."
         
         balance = self.iq.get_balance()
         pairs_str = ", ".join(self.selected_pairs[:6]) + (f" (+{pairs_count - 6} más)" if pairs_count > 6 else "")
@@ -136,6 +135,7 @@ class TradingEngine:
             return True, "El bot ya está detenido."
         
         self.is_running = False
+        self.iq.stop_streams(self.timeframe)
         for p, st in self.pairs_state.items():
             st["state"] = "SEARCHING"
             st["pending_signal"] = None
@@ -147,17 +147,45 @@ class TradingEngine:
         logger.info("Bot detenido.")
         return True, "Bot apagado correctamente."
 
+    async def broadcast_tick(self, now: float):
+        """Transmite ticks instantáneos de alta frecuencia (sub-segundo/milisegundo)."""
+        if not self.websocket_listeners:
+            return
+        
+        dt = datetime.fromtimestamp(now)
+        time_ms_str = dt.strftime("%H:%M:%S.%f")[:-3]
+        
+        prices_map = {}
+        for p in self.selected_pairs:
+            st = self.pairs_state.get(p)
+            if st:
+                prices_map[p] = st.get("tick_price", 0.0)
+
+        data = {
+            "type": "tick",
+            "ts": now,
+            "time_ms": time_ms_str,
+            "pair": self.active_pair,
+            "tick_price": self.current_tick_price,
+            "seconds_left": self.seconds_left_in_candle,
+            "prices": prices_map
+        }
+        dead_clients = set()
+        for ws in self.websocket_listeners:
+            try:
+                await ws.send_json(data)
+            except Exception:
+                dead_clients.add(ws)
+        self.websocket_listeners.difference_update(dead_clients)
+
     async def broadcast_status(self):
-        """Envía el estado segundo a segundo a los clientes conectados por WebSocket."""
-        # Estado del par actualmente destacado
+        """Envía el estado completo consolidado a los clientes conectados por WebSocket."""
         active_state_data = self.pairs_state.get(self.active_pair, {})
         featured_state = active_state_data.get("state", "SEARCHING")
         featured_pending = active_state_data.get("pending_signal", None)
         featured_trade = active_state_data.get("current_trade", None)
         featured_price = active_state_data.get("tick_price", self.current_tick_price)
 
-        # Si el par destacado está en SEARCHING pero otro par está en CONFIRMING o IN_TRADE,
-        # lo destacamos dinámicamente para que el usuario vea la acción
         for p, st in self.pairs_state.items():
             if st.get("state") in ["IN_TRADE", "CONFIRMING"]:
                 featured_state = st.get("state")
@@ -167,7 +195,6 @@ class TradingEngine:
                 featured_price = st.get("tick_price", 0.0)
                 break
 
-        # Resumen ligero de cada par para la cuadrícula Multi-Par
         pairs_overview = []
         for p in self.selected_pairs:
             st = self.pairs_state.get(p, {})
@@ -181,6 +208,7 @@ class TradingEngine:
             })
 
         data = {
+            "type": "full",
             "is_running": self.is_running,
             "state": featured_state,
             "pair": self.active_pair,
@@ -196,7 +224,7 @@ class TradingEngine:
             "pending_signal": featured_pending,
             "current_trade": featured_trade,
             "stats": self.session_stats,
-            "history": self.trade_history[-20:] # Últimas 20 operaciones
+            "history": self.trade_history[-20:]
         }
         
         dead_clients = set()
@@ -208,59 +236,86 @@ class TradingEngine:
         self.websocket_listeners.difference_update(dead_clients)
 
     async def run_loop(self):
-        """Bucle infinito asíncrono con control segundo a segundo multi-par."""
-        logger.info("Iniciando bucle de control segundo a segundo multi-par...")
+        """Bucle infinito asíncrono con streaming instantáneo de alta frecuencia (50ms)."""
+        logger.info("Iniciando bucle de control de alta frecuencia (ticks instantáneos)...")
+        last_strategy_second = -1
+        last_tick_broadcast_time = 0.0
+
         while True:
             try:
-                if self.is_running and self.selected_pairs:
-                    await self._tick()
-                else:
-                    self.seconds_left_in_candle = 0
-                    self.current_status_message = "Bot detenido - Esperando activación en el panel admin"
-                
-                await self.broadcast_status()
-            except Exception as e:
-                logger.error(f"Error en tick multi-par de TradingEngine: {e}", exc_info=True)
-            
-            await asyncio.sleep(1.0)
+                now = time.time()
+                current_int_sec = int(now)
 
-    async def _tick(self):
+                # =========================================================
+                # 1. STREAMING DE ALTA FRECUENCIA (CADA 50-70 MS)
+                # =========================================================
+                if self.is_running and self.selected_pairs:
+                    for pair in self.selected_pairs:
+                        p_state = self.pairs_state.setdefault(pair, {
+                            "pair": pair,
+                            "state": "SEARCHING",
+                            "pending_signal": None,
+                            "current_trade": None,
+                            "tick_price": 0.0,
+                            "last_analyzed_time": 0,
+                            "status_msg": "Analizando...",
+                            "seconds_left": self.seconds_left_in_candle
+                        })
+                        p_state["tick_price"] = self.iq.get_realtime_price(pair, self.timeframe)
+                        if pair == self.active_pair:
+                            self.current_tick_price = p_state["tick_price"]
+
+                    self.seconds_left_in_candle = self.timeframe - (current_int_sec % self.timeframe)
+                    if self.seconds_left_in_candle == self.timeframe:
+                        self.seconds_left_in_candle = 0
+
+                    if (now - last_tick_broadcast_time) >= 0.06:
+                        await self.broadcast_tick(now)
+                        last_tick_broadcast_time = now
+
+                # =========================================================
+                # 2. EVALUACIÓN DE ESTRATEGIA (CADA SEGUNDO EXACTO)
+                # =========================================================
+                if current_int_sec != last_strategy_second:
+                    last_strategy_second = current_int_sec
+                    if self.is_running and self.selected_pairs:
+                        await self._tick_strategy()
+                    else:
+                        self.seconds_left_in_candle = 0
+                        self.current_status_message = "Bot detenido - Esperando activación en el panel admin"
+
+                    await self.broadcast_status()
+
+            except Exception as e:
+                logger.error(f"Error en bucle de TradingEngine: {e}", exc_info=True)
+            
+            await asyncio.sleep(0.05)
+
+    async def _tick_strategy(self):
         server_ts = self.iq.get_server_timestamp()
         dt_server = datetime.fromtimestamp(server_ts)
         time_str = dt_server.strftime("%H:%M:%S")
-        
-        # Segundos restantes para que cierre la vela actual del timeframe configurado
-        self.seconds_left_in_candle = self.timeframe - (server_ts % self.timeframe)
-        if self.seconds_left_in_candle == self.timeframe:
-            self.seconds_left_in_candle = 0
 
         total_pairs = len(self.selected_pairs)
         active_confirming = 0
         active_trades = 0
 
-        # Iteramos cada par seleccionado para análisis simultáneo
         for pair in self.selected_pairs:
-            p_state = self.pairs_state.setdefault(pair, {
-                "pair": pair,
-                "state": "SEARCHING",
-                "pending_signal": None,
-                "current_trade": None,
-                "tick_price": 0.0,
-                "last_analyzed_time": 0,
-                "status_msg": "Analizando...",
-                "seconds_left": self.seconds_left_in_candle
-            })
+            p_state = self.pairs_state.get(pair)
+            if not p_state:
+                continue
+
             p_state["seconds_left"] = self.seconds_left_in_candle
 
-            # Obtener velas del par (60 velas)
+            # Obtener velas para análisis técnico
             candles = self.iq.get_candles(pair, self.timeframe, 60)
             if not candles or len(candles) < 10:
                 continue
 
             latest_candle = candles[-1]
-            p_state["tick_price"] = float(latest_candle.get('close', 0.0))
-            if pair == self.active_pair:
-                self.current_tick_price = p_state["tick_price"]
+            # Si hay precio de vela, coordinar
+            if p_state["tick_price"] == 0:
+                p_state["tick_price"] = float(latest_candle.get('close', 0.0))
 
             # =========================================================
             # ESTADO 1: SEARCHING (Buscando señal SCRIPT VIP en este par)
@@ -276,7 +331,7 @@ class TradingEngine:
                     analysis = self.indicator.analyze_candles(candles[:-1])
                     
                     if analysis.get('signal'):
-                        direction = analysis['signal']  # 'CALL' o 'PUT'
+                        direction = analysis['signal']
                         candle_dt_str = datetime.fromtimestamp(closed_candle_time).strftime("%H:%M:%S")
                         
                         p_state["pending_signal"] = {
@@ -290,7 +345,6 @@ class TradingEngine:
                         p_state["state"] = "CONFIRMING"
                         p_state["status_msg"] = f"¡SEÑAL {direction}! Confirmando..."
                         
-                        # Destacar este par en pantalla
                         self.active_pair = pair
                         tf_label = "1M" if self.timeframe == 60 else f"{self.timeframe//60}M"
                         logger.info(f"Señal VIP detectada: {pair} {direction}. Esperando confirmación.")
@@ -304,7 +358,6 @@ class TradingEngine:
                 direction = p_state["pending_signal"]["direction"]
                 p_state["status_msg"] = f"Confirmando {direction} ({self.seconds_left_in_candle}s)"
                 
-                # En el segundo final de la vela (<= 1s para el segundo 00)
                 if self.seconds_left_in_candle <= 1:
                     confirm_candle = latest_candle
                     c_open = confirm_candle['open']
@@ -325,7 +378,6 @@ class TradingEngine:
                             reason = f"Vela alcista/doji (Open: {c_open}, Close: {c_close})"
                     
                     if is_confirmed:
-                        # Confirmada: Entramos en el segundo exacto 00 de la siguiente vela
                         entry_time_str = datetime.fromtimestamp(server_ts + 1).strftime("%H:%M:%S")
                         trade_amount = self.current_amount
                         
@@ -446,23 +498,9 @@ class TradingEngine:
                     p_state["pending_signal"] = None
                     p_state["current_trade"] = None
 
-        # Mensaje global de estado para el banner principal
         if active_trades > 0:
             self.current_status_message = f"[{time_str}] {active_trades} operación(es) en curso | Monitoreando {total_pairs} pares."
         elif active_confirming > 0:
             self.current_status_message = f"[{time_str}] Confirmando {active_confirming} señal(es) VIP | Monitoreando {total_pairs} pares."
         else:
             self.current_status_message = f"[{time_str}] Escaneando {total_pairs} pares en simultáneo ({self.timeframe}s) - Vela: {self.seconds_left_in_candle}s restantes"
-
-    def update_config(self, pairs: List[str], timeframe: int, amount: float, martingale: int, account_type: str):
-        """Actualiza parámetros desde el panel de control web."""
-        if pairs:
-            self.set_selected_pairs(pairs)
-        self.timeframe = int(timeframe)
-        self.base_amount = float(amount)
-        if self.current_martingale_step == 0:
-            self.current_amount = self.base_amount
-        self.martingale_steps = int(martingale)
-        if account_type.upper() != self.iq.account_type:
-            self.iq.change_balance(account_type.upper())
-        logger.info(f"Configuración actualizada: Pares={len(self.selected_pairs)}, TF={self.timeframe}s, Monto=${self.base_amount}, Martingala={self.martingale_steps}, Cuenta={self.iq.account_type}")

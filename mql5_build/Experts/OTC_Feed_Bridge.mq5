@@ -29,6 +29,8 @@ string g_client_name   = "";
 string g_expires_at    = "";
 datetime g_last_check  = 0;
 ulong  g_ticks_count   = 0;
+int    g_seed_index    = -1; // -1 = cargar _Symbol primero, luego 0..9
+bool   g_all_seeded    = false;
 
 //+------------------------------------------------------------------+
 //| Inicialización del Expert Advisor                                |
@@ -47,20 +49,7 @@ int OnInit()
    // 2. Crear los 10 Símbolos Personalizados OTC si no existen
    CreateCustomOTCSymbols();
 
-   // 3. Descargar e inyectar historial de velas M1 para eliminar pantalla negra
-   Print("Descargando e inyectando historial de velas M1...");
-   string curSym = _Symbol;
-   if(StringFind(curSym, "_OTC") >= 0)
-   {
-      SeedHistoryCandles(curSym);
-   }
-   for(int i = 0; i < 10; i++)
-   {
-      if(OTC_PAIRS[i] != curSym)
-         SeedHistoryCandles(OTC_PAIRS[i]);
-   }
-
-   // 4. Configurar el gráfico para mostrar velas completas con colores institucionales
+   // 3. Configurar el gráfico para mostrar velas completas con colores institucionales
    ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
    ChartSetInteger(0, CHART_AUTOSCROLL, true);
    ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, C'0, 230, 118');
@@ -69,13 +58,13 @@ int OnInit()
    ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'255, 23, 68');
    ChartRedraw(0);
 
-   // 5. Inicializar Timer de alta frecuencia
+   // 4. Inicializar Timer de alta frecuencia
    EventSetMillisecondTimer(InpTimerMs);
 
-   // 6. Dibujar Panel Informativo
-   DrawHUD("🟢 CONECTADO AL VPS", clrSpringGreen, "10 Pares OTC en Streaming");
+   // 5. Dibujar Panel Informativo
+   DrawHUD("🟢 CONECTADO AL VPS", clrSpringGreen, "Cargando velas en vivo...");
 
-   Print("OTC Feed Bridge iniciado con éxito. Licencia activa para: ", g_client_name);
+   Print("OTC Feed Bridge iniciado con éxito en milisegundos. Licencia activa para: ", g_client_name);
    return(INIT_SUCCEEDED);
 }
 
@@ -107,7 +96,39 @@ void OnTimer()
       g_last_check = TimeCurrent();
    }
 
-   // Solicitar datos OTC al VPS
+   // 1. Carga progresiva no bloqueante de historial (1 par por ciclo para evitar bloqueos)
+   if(!g_all_seeded)
+   {
+      if(g_seed_index == -1)
+      {
+         string curSym = _Symbol;
+         if(StringFind(curSym, "_OTC") >= 0)
+         {
+            SeedHistoryCandles(curSym);
+            ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
+            ChartSetInteger(0, CHART_AUTOSCROLL, true);
+            ChartNavigate(0, CHART_END, 0);
+            ChartRedraw(0);
+         }
+         g_seed_index = 0;
+      }
+      else if(g_seed_index < 10)
+      {
+         string symToSeed = OTC_PAIRS[g_seed_index];
+         if(symToSeed != _Symbol)
+         {
+            SeedHistoryCandles(symToSeed);
+         }
+         g_seed_index++;
+      }
+      else
+      {
+         g_all_seeded = true;
+         Print("✅ Historial de todos los pares OTC cargado con éxito.");
+      }
+   }
+
+   // 2. Solicitar datos OTC al VPS e inyectar en ticks y velas
    FetchAndFeedOTCData();
 }
 
@@ -293,6 +314,13 @@ void SeedHistoryCandles(string sym)
       ArrayResize(rates, ratesCount);
       int updated = CustomRatesUpdate(sym, rates, ratesCount);
       Print("✅ ", sym, ": ", updated, " velas M1 inyectadas con éxito.");
+      if(sym == _Symbol)
+      {
+         ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
+         ChartSetInteger(0, CHART_AUTOSCROLL, true);
+         ChartNavigate(0, CHART_END, 0);
+         ChartRedraw(0);
+      }
    }
 }
 

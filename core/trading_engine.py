@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from core.indicator import ScriptVipIndicator
 from core.iq_client import IQOptionClient
 from core.telegram_bot import TelegramNotifier
+from core.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +56,10 @@ class TradingEngine:
         self.pairs_state: Dict[str, Dict[str, Any]] = {}
         self._init_pair_states()
         
-        # Historial y Estadísticas globales de sesión
-        self.trade_history: List[Dict[str, Any]] = []
-        self.session_stats = {
-            "wins": 0,
-            "losses": 0,
-            "equals": 0,
-            "net_profit": 0.0,
-            "total_trades": 0,
-            "winrate": 0.0
-        }
+        # Historial y Estadísticas persistentes en SQLite DB (NUNCA se borran)
+        self.db = DatabaseManager()
+        self.trade_history: List[Dict[str, Any]] = self.db.load_trades()
+        self.session_stats = self.db.get_stats()
         
         # Streaming WebSocket a clientes web
         self.websocket_listeners = set()
@@ -91,9 +86,10 @@ class TradingEngine:
             del self.pairs_state[k]
 
     def set_selected_pairs(self, pairs: List[str]) -> Tuple[bool, str]:
-        valid_pairs = [p.strip().upper() for p in pairs if p.strip()]
+        allowed = set(self.config.ALL_AVAILABLE_PAIRS)
+        valid_pairs = [p.strip().upper() for p in pairs if p.strip() and p.strip().upper() in allowed]
         if not valid_pairs:
-            return False, "Debes seleccionar al menos un par de divisas."
+            return False, "Debes seleccionar al menos un par válido de los 4 principales (Normal o OTC)."
         
         self.selected_pairs = valid_pairs
         if self.active_pair not in self.selected_pairs:
@@ -103,7 +99,7 @@ class TradingEngine:
         if self.is_running:
             self.iq.start_streams(self.selected_pairs, self.timeframe)
         logger.info(f"Pares actualizados para análisis simultáneo ({len(self.selected_pairs)}): {self.selected_pairs}")
-        return True, f"Se han seleccionado {len(self.selected_pairs)} pares para análisis en simultáneo."
+        return True, f"Se han guardado {len(self.selected_pairs)} pares para análisis y operación."
 
     def set_active_pair(self, pair: str):
         pair_upper = pair.upper()
@@ -117,7 +113,7 @@ class TradingEngine:
             return True, "El bot ya está en ejecución."
         
         if not self.selected_pairs:
-            return False, "Debes seleccionar al menos un par antes de encender el bot."
+            return False, "⚠️ ATENCIÓN: Debes seleccionar y guardar al menos un par antes de encender el bot."
 
         success, msg = self.iq.connect()
         self.is_running = True
@@ -512,6 +508,7 @@ class TradingEngine:
                     "martingale_step": self.current_martingale_step
                 }
                 self.trade_history.append(trade_record)
+                self.db.save_trade(trade_record)
 
                 self.telegram.notify_result(
                     pair=pair,

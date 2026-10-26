@@ -69,8 +69,7 @@ class IQOptionClient:
         # Generador de micro-ticks de alta frecuencia
         if pair_clean not in self.realtime_prices:
             base_prices = {
-                "EURUSD": 1.08500, "GBPUSD": 1.26500, "USDJPY": 154.500, "EURJPY": 167.200, "AUDUSD": 0.65500,
-                "USDCAD": 1.38500, "USDCHF": 0.90200, "EURGBP": 0.85800, "NZDUSD": 0.59800, "GBPJPY": 195.400
+                "EURUSD": 1.08500, "GBPUSD": 1.26500, "USDJPY": 154.500, "EURJPY": 167.200
             }
             clean_key = pair_clean.replace("-OTC", "")
             self.realtime_prices[pair_clean] = base_prices.get(clean_key, 1.08500)

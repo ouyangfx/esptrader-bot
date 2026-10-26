@@ -3,25 +3,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# 4 Pares Normales Principales + 4 Pares OTC Principales
+NORMAL_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "EURJPY"]
+OTC_PAIRS = ["EURUSD-OTC", "GBPUSD-OTC", "USDJPY-OTC", "EURJPY-OTC"]
+ALL_AVAILABLE_PAIRS = NORMAL_PAIRS + OTC_PAIRS
+
+_pairs_raw = os.getenv("TRADING_PAIRS", "EURUSD,GBPUSD,USDJPY,EURJPY,EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC,EURJPY-OTC")
+_selected = [p.strip().upper() for p in _pairs_raw.split(",") if p.strip() and p.strip().upper() in ALL_AVAILABLE_PAIRS]
+if not _selected:
+    _selected = ["EURUSD", "EURUSD-OTC"]
+
 class Config:
     # IQ Option Settings
     IQ_EMAIL = os.getenv("IQ_EMAIL", "")
     IQ_PASSWORD = os.getenv("IQ_PASSWORD", "")
     IQ_ACCOUNT_TYPE = os.getenv("IQ_ACCOUNT_TYPE", "PRACTICE").upper()
 
-    # Bot Trading Parameters - 10 Normal + 10 OTC Pairs
-    NORMAL_PAIRS = [
-        "EURUSD", "GBPUSD", "USDJPY", "EURJPY", "AUDUSD",
-        "USDCAD", "USDCHF", "EURGBP", "NZDUSD", "GBPJPY"
-    ]
-    OTC_PAIRS = [
-        "EURUSD-OTC", "GBPUSD-OTC", "USDJPY-OTC", "EURJPY-OTC", "AUDUSD-OTC",
-        "USDCAD-OTC", "USDCHF-OTC", "NZDUSD-OTC", "EURGBP-OTC", "GBPJPY-OTC"
-    ]
-    ALL_AVAILABLE_PAIRS = NORMAL_PAIRS + OTC_PAIRS
+    NORMAL_PAIRS = NORMAL_PAIRS
+    OTC_PAIRS = OTC_PAIRS
+    ALL_AVAILABLE_PAIRS = ALL_AVAILABLE_PAIRS
+    TRADING_PAIRS = _selected
 
-    _pairs_raw = os.getenv("TRADING_PAIRS", "EURUSD,GBPUSD,USDJPY,EURJPY,EURUSD-OTC,GBPUSD-OTC")
-    TRADING_PAIRS = [p.strip().upper() for p in _pairs_raw.split(",") if p.strip()]
     TIMEFRAME = int(os.getenv("TIMEFRAME", "60"))  # 60s (1m) or 300s (5m)
     EXPIRATION_TIME = int(os.getenv("EXPIRATION_TIME", "1"))  # 1 min
     TRADE_AMOUNT = float(os.getenv("TRADE_AMOUNT", "2.0"))

@@ -68,7 +68,7 @@
       <div class="card-header">
         <div class="header-title">
           <i class="fa-solid fa-plug-circle-check"></i>
-          <h3>Login IQ Option & Prueba de Conexión</h3>
+          <h3>Login IQ Option & Conexión al Broker</h3>
         </div>
         <span class="status-badge-iq" id="iq-status-badge">
           <i class="fa-solid fa-circle-notch fa-spin"></i> Verificando conexión...
@@ -95,8 +95,11 @@
             </select>
           </div>
 
-          <div class="iq-form-group-btn">
-            <button type="button" id="btn-test-iq" class="btn-test-iq glow-button">
+          <div class="iq-form-group-btn" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btn-save-iq" class="btn-save-section glow-button" style="background: linear-gradient(135deg, #00f59b 0%, #00b894 100%); color: #06090f; font-weight: 700; padding: 10px 18px; border-radius: 8px;">
+              <i class="fa-solid fa-floppy-disk"></i> <span id="btn-save-iq-text">Guardar Credenciales</span>
+            </button>
+            <button type="button" id="btn-test-iq" class="btn-test-iq glow-button" style="padding: 10px 18px; border-radius: 8px;">
               <i class="fa-solid fa-network-wired"></i> <span id="btn-test-iq-text">Probar Conexión</span>
             </button>
           </div>
@@ -106,26 +109,26 @@
       </div>
     </section>
 
-    <!-- SELECCIÓN DE PARES SIMULTÁNEOS (10 NORMALES + 10 OTC) -->
+    <!-- SELECCIÓN DE PARES A OPERAR (4 PRINCIPALES NORMALES + 4 PRINCIPALES OTC) -->
     <section class="card glow-panel pairs-selection-card">
       <div class="card-header">
         <div class="header-title">
           <i class="fa-solid fa-layer-group"></i>
-          <h3>Pares a Analizar en Simultáneo</h3>
+          <h3>Pares a Analizar y Operar</h3>
           <span class="pairs-count-badge" id="selected-count-badge">
-            <span id="selected-count">0</span> de 20 Seleccionados
+            <span id="selected-count">0</span> de 8 Seleccionados
           </span>
         </div>
 
         <div class="pairs-quick-actions">
           <button type="button" class="btn-quick-pair" id="btn-select-normal">
-            <i class="fa-solid fa-chart-line"></i> 10 Normales
+            <i class="fa-solid fa-chart-line"></i> 4 Normales
           </button>
           <button type="button" class="btn-quick-pair" id="btn-select-otc">
-            <i class="fa-solid fa-moon"></i> 10 OTC
+            <i class="fa-solid fa-moon"></i> 4 OTC
           </button>
           <button type="button" class="btn-quick-pair" id="btn-select-all">
-            <i class="fa-solid fa-check-double"></i> Todos (20)
+            <i class="fa-solid fa-check-double"></i> Todos (8)
           </button>
           <button type="button" class="btn-quick-pair btn-clear-pairs" id="btn-deselect-all">
             <i class="fa-solid fa-xmark"></i> Deseleccionar
@@ -134,23 +137,17 @@
       </div>
 
       <div class="pairs-grid-container">
-        <!-- MERCADO NORMAL (10 PARES) -->
+        <!-- MERCADO NORMAL (4 PARES PRINCIPALES) -->
         <div class="pairs-market-column">
           <div class="market-section-title">
-            <i class="fa-solid fa-sun icon-market-normal"></i> Mercado Normal (10 Pares)
+            <i class="fa-solid fa-sun icon-market-normal"></i> Mercado Real (4 Pares Principales)
           </div>
           <div class="pairs-checkboxes-grid">
             {% set normal_pairs = [
               ('EURUSD', 'EUR / USD'),
               ('GBPUSD', 'GBP / USD'),
               ('USDJPY', 'USD / JPY'),
-              ('EURJPY', 'EUR / JPY'),
-              ('AUDUSD', 'AUD / USD'),
-              ('USDCAD', 'USD / CAD'),
-              ('USDCHF', 'USD / CHF'),
-              ('EURGBP', 'EUR / GBP'),
-              ('NZDUSD', 'NZD / USD'),
-              ('GBPJPY', 'GBP / JPY')
+              ('EURJPY', 'EUR / JPY')
             ] %}
             {% for symbol, label in normal_pairs %}
             <label class="pair-checkbox-card" data-symbol="{{ symbol }}">
@@ -165,23 +162,17 @@
           </div>
         </div>
 
-        <!-- MERCADO OTC (10 PARES) -->
+        <!-- MERCADO OTC (4 PARES PRINCIPALES) -->
         <div class="pairs-market-column">
           <div class="market-section-title">
-            <i class="fa-solid fa-moon icon-market-otc"></i> Mercado OTC (10 Pares)
+            <i class="fa-solid fa-moon icon-market-otc"></i> Mercado OTC (4 Pares Principales)
           </div>
           <div class="pairs-checkboxes-grid">
             {% set otc_pairs = [
               ('EURUSD-OTC', 'EUR / USD (OTC)'),
               ('GBPUSD-OTC', 'GBP / USD (OTC)'),
               ('USDJPY-OTC', 'USD / JPY (OTC)'),
-              ('EURJPY-OTC', 'EUR / JPY (OTC)'),
-              ('AUDUSD-OTC', 'AUD / USD (OTC)'),
-              ('USDCAD-OTC', 'USD / CAD (OTC)'),
-              ('USDCHF-OTC', 'USD / CHF (OTC)'),
-              ('NZDUSD-OTC', 'NZD / USD (OTC)'),
-              ('EURGBP-OTC', 'EUR / GBP (OTC)'),
-              ('GBPJPY-OTC', 'GBP / JPY (OTC)')
+              ('EURJPY-OTC', 'EUR / JPY (OTC)')
             ] %}
             {% for symbol, label in otc_pairs %}
             <label class="pair-checkbox-card pair-otc" data-symbol="{{ symbol }}">
@@ -196,6 +187,16 @@
             {% endfor %}
           </div>
         </div>
+      </div>
+
+      <!-- BOTÓN DEDICADO DE GUARDAR PARES -->
+      <div class="pairs-footer-action" style="padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div class="pairs-hint" style="color: #8e9bb0; font-size: 0.88rem;">
+          <i class="fa-solid fa-triangle-exclamation" style="color: #ffb800;"></i> <strong>Paso obligatorio:</strong> Selecciona los pares y presiona Guardar antes de encender el bot.
+        </div>
+        <button type="button" id="btn-save-pairs" class="btn-save-section glow-button" style="background: linear-gradient(135deg, #00d2ff 0%, #0072ff 100%); color: #fff; font-weight: 700; padding: 12px 24px; border-radius: 10px; cursor: pointer;">
+          <i class="fa-solid fa-floppy-disk"></i> <span id="btn-save-pairs-text">Guardar Pares a Operar</span>
+        </button>
       </div>
     </section>
 
@@ -318,14 +319,14 @@
             <div class="form-group">
               <label for="cfg-timeframe"><i class="fa-solid fa-chart-simple"></i> Timeframe Análisis</label>
               <select id="cfg-timeframe" name="timeframe" class="form-select">
-                <option value="60">1 Minuto (M1)</option>
-                <option value="300">5 Minutos (M5)</option>
+                <option value="60" {% if engine.timeframe == 60 %}selected{% endif %}>1 Minuto (M1)</option>
+                <option value="300" {% if engine.timeframe == 300 %}selected{% endif %}>5 Minutos (M5)</option>
               </select>
             </div>
 
             <div class="form-group">
               <label for="cfg-amount"><i class="fa-solid fa-dollar-sign"></i> Importe Base ($)</label>
-              <input type="number" id="cfg-amount" name="amount" min="1" step="0.5" value="2.0" class="form-input">
+              <input type="number" id="cfg-amount" name="amount" min="1" step="0.5" value="{{ engine.base_amount }}" class="form-input">
             </div>
           </div>
 
@@ -333,23 +334,32 @@
             <div class="form-group">
               <label for="cfg-martingale"><i class="fa-solid fa-calculator"></i> Pasos Martingala</label>
               <select id="cfg-martingale" name="martingale" class="form-select">
-                <option value="0">0 (Sin Martingala)</option>
-                <option value="1" selected>1 Paso (Recomendado)</option>
-                <option value="2">2 Pasos</option>
+                <option value="0" {% if engine.martingale_steps == 0 %}selected{% endif %}>0 (Sin Martingala)</option>
+                <option value="1" {% if engine.martingale_steps == 1 %}selected{% endif %}>1 Paso (Recomendado)</option>
+                <option value="2" {% if engine.martingale_steps == 2 %}selected{% endif %}>2 Pasos</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label for="cfg-account"><i class="fa-solid fa-wallet"></i> Tipo de Cuenta IQ Option</label>
-              <select id="cfg-account" name="account_type" class="form-select">
-                <option value="PRACTICE">Cuenta Demo (PRACTICE)</option>
-                <option value="REAL">Cuenta Real (REAL)</option>
-              </select>
+              <label for="cfg-multiplier"><i class="fa-solid fa-xmark"></i> Multiplicador Martingala</label>
+              <input type="number" id="cfg-multiplier" name="martingale_multiplier" min="1.5" max="3.0" step="0.1" value="{{ engine.martingale_multiplier }}" class="form-input">
             </div>
           </div>
 
-          <button type="submit" class="btn-save glow-button">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar y Aplicar Parámetros
+          <div class="form-row">
+            <div class="form-group">
+              <label for="cfg-stoploss"><i class="fa-solid fa-shield-halved"></i> Stop Loss ($)</label>
+              <input type="number" id="cfg-stoploss" name="stop_loss" min="5" step="5" value="{{ config.STOP_LOSS }}" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label for="cfg-takeprofit"><i class="fa-solid fa-bullseye"></i> Take Profit ($)</label>
+              <input type="number" id="cfg-takeprofit" name="take_profit" min="10" step="5" value="{{ config.TAKE_PROFIT }}" class="form-input">
+            </div>
+          </div>
+
+          <button type="submit" id="btn-save-params" class="btn-save glow-button" style="background: linear-gradient(135deg, #00f59b 0%, #00b894 100%); color: #06090f; font-weight: 700; font-size: 0.95rem; padding: 12px 20px; border-radius: 8px;">
+            <i class="fa-solid fa-floppy-disk"></i> <span id="btn-save-params-text">Guardar Parámetros de Riesgo</span>
           </button>
         </form>
       </section>

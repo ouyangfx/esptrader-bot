@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional, List
+import os
 import asyncio
 import secrets
 import logging
@@ -21,10 +22,55 @@ templates = Jinja2Templates(directory="templates")
 # Sesiones en memoria activas
 active_sessions = set()
 
+def save_env_vars(updates: dict):
+    """Guarda variables de entorno en .env preservando el resto de líneas."""
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    
+    updated_keys = set()
+    new_lines = []
+    for line in lines:
+        matched = False
+        for k, v in updates.items():
+            if line.startswith(f"{k}="):
+                new_lines.append(f"{k}={v}\n")
+                updated_keys.add(k)
+                matched = True
+                break
+        if not matched:
+            new_lines.append(line)
+            
+    for k, v in updates.items():
+        if k not in updated_keys:
+            new_lines.append(f"{k}={v}\n")
+            
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
 class IqTestModel(BaseModel):
     email: str
     password: str
     account_type: str = "PRACTICE"
+
+class IqSaveModel(BaseModel):
+    email: str
+    password: str
+    account_type: str = "PRACTICE"
+
+class PairsSaveModel(BaseModel):
+    pairs: List[str]
+
+class ParamsSaveModel(BaseModel):
+    timeframe: int = 60
+    amount: float = 2.0
+    martingale: int = 1
+    martingale_multiplier: float = 2.2
+    stop_loss: Optional[float] = 20.0
+    take_profit: Optional[float] = 50.0
+    account_type: Optional[str] = "PRACTICE"
 
 class PairsUpdateModel(BaseModel):
     pairs: List[str]
@@ -156,6 +202,105 @@ async def api_test_iq_connection(data: IqTestModel, request: Request):
     engine = request.app.state.engine
     result = engine.iq.test_connection(data.email, data.password, data.account_type)
     return result
+
+@router.post("/api/iq/save")
+async def api_save_iq(data: IqSaveModel, request: Request):
+    """Guarda las credenciales de IQ Option en .env y actualiza el cliente activo."""
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    engine = request.app.state.engine
+    
+    email = data.email.strip()
+    password = data.password.strip()
+    account_type = data.account_type.upper()
+    
+    if not email or not password:
+        return {"success": False, "message": "Debes ingresar correo y contraseña válidos."}
+        
+    save_env_vars({
+        "IQ_EMAIL": email,
+        "IQ_PASSWORD": password,
+        "IQ_ACCOUNT_TYPE": account_type
+    })
+    
+    engine.iq.email = email
+    engine.iq.password = password
+    engine.iq.change_balance(account_type)
+    
+    # Probar conexión al guardar
+    test_res = engine.iq.test_connection(email, password, account_type)
+    if test_res.get("success"):
+        engine.iq.connect()
+        return {
+            "success": True, 
+            "message": f"Credenciales guardadas y conexión exitosa ({account_type}). Saldo: ${test_res.get('balance', 0):.2f}",
+            "balance": test_res.get("balance", 0.0),
+            "account_type": account_type
+        }
+    else:
+        return {
+            "success": True, 
+            "message": f"Credenciales guardadas en .env. (Aviso de conexión: {test_res.get('message')})",
+            "balance": 0.0,
+            "account_type": account_type
+        }
+
+@router.post("/api/pairs/save")
+async def api_save_pairs(data: PairsSaveModel, request: Request):
+    """Guarda los pares seleccionados (4 Normales y 4 OTC) en .env y en el motor."""
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    engine = request.app.state.engine
+    config = request.app.state.config
+    
+    allowed = set(config.ALL_AVAILABLE_PAIRS)
+    cleaned = [p.strip().upper() for p in data.pairs if p.strip() and p.strip().upper() in allowed]
+    
+    if not cleaned:
+        return {"success": False, "message": "Debes seleccionar al menos un par principal válido (Normal o OTC)."}
+        
+    success, msg = engine.set_selected_pairs(cleaned)
+    if success:
+        save_env_vars({
+            "TRADING_PAIRS": ",".join(cleaned)
+        })
+    return {"success": success, "message": msg, "selected_pairs": engine.selected_pairs}
+
+@router.post("/api/params/save")
+async def api_save_params(data: ParamsSaveModel, request: Request):
+    """Guarda los parámetros de trading y gestión de riesgo en .env y en el motor."""
+    if not is_authenticated(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    engine = request.app.state.engine
+    
+    tf = int(data.timeframe)
+    amt = float(data.amount)
+    mg_steps = int(data.martingale)
+    mg_mult = float(data.martingale_multiplier)
+    sl = float(data.stop_loss or 20.0)
+    tp = float(data.take_profit or 50.0)
+    acc = str(data.account_type or "PRACTICE").upper()
+    
+    save_env_vars({
+        "TIMEFRAME": str(tf),
+        "TRADE_AMOUNT": str(amt),
+        "MARTINGALE_STEPS": str(mg_steps),
+        "MARTINGALE_MULTIPLIER": str(mg_mult),
+        "STOP_LOSS": str(sl),
+        "TAKE_PROFIT": str(tp),
+        "IQ_ACCOUNT_TYPE": acc
+    })
+    
+    engine.timeframe = tf
+    engine.base_amount = amt
+    if engine.current_martingale_step == 0:
+        engine.current_amount = amt
+    engine.martingale_steps = mg_steps
+    engine.martingale_multiplier = mg_mult
+    if acc != engine.iq.account_type:
+        engine.iq.change_balance(acc)
+        
+    return {"success": True, "message": f"Parámetros de trading y riesgo guardados en .env exitosamente."}
 
 @router.post("/api/pairs/update")
 async def api_update_pairs(data: PairsUpdateModel, request: Request):

@@ -11,22 +11,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusDescEl = document.getElementById('status-desc');
   const btnToggle = document.getElementById('btn-toggle-bot');
   
-  // IQ Test
+  // IQ Test & Save
   const testEmail = document.getElementById('test-iq-email');
   const testPass = document.getElementById('test-iq-pass');
   const testAccount = document.getElementById('test-iq-account');
   const btnTestIq = document.getElementById('btn-test-iq');
   const btnTestIqText = document.getElementById('btn-test-iq-text');
+  const btnSaveIq = document.getElementById('btn-save-iq');
+  const btnSaveIqText = document.getElementById('btn-save-iq-text');
   const iqStatusBadge = document.getElementById('iq-status-badge');
   const iqTestResult = document.getElementById('iq-test-result');
 
-  // Multi-Pair Checkboxes
+  // Multi-Pair Checkboxes & Dedicated Save Button
   const chkPairs = document.querySelectorAll('.chk-pair');
   const selectedCountEl = document.getElementById('selected-count');
   const btnSelectNormal = document.getElementById('btn-select-normal');
   const btnSelectOtc = document.getElementById('btn-select-otc');
   const btnSelectAll = document.getElementById('btn-select-all');
   const btnDeselectAll = document.getElementById('btn-deselect-all');
+  const btnSavePairs = document.getElementById('btn-save-pairs');
+  const btnSavePairsText = document.getElementById('btn-save-pairs-text');
   const multiPairsGrid = document.getElementById('multi-pairs-grid');
 
   // Radar Principal
@@ -86,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // GESTIÓN DE PARES (CHECKBOXES & ACCIONES RÁPIDAS)
+  // GESTIÓN DE PARES (CHECKBOXES & BOTÓN GUARDAR)
   // ==========================================
   function updateCheckboxUI() {
     let count = 0;
@@ -103,26 +107,49 @@ document.addEventListener('DOMContentLoaded', () => {
     return count;
   }
 
-  async function syncSelectedPairs() {
+  async function saveSelectedPairs() {
     const selected = [];
     chkPairs.forEach(chk => {
       if (chk.checked) selected.push(chk.value);
     });
 
+    if (selected.length === 0) {
+      alert("⚠️ ATENCIÓN: Selecciona al menos un par con la casilla de verificación antes de guardar.");
+      return false;
+    }
+
+    if (btnSavePairs) {
+      btnSavePairs.disabled = true;
+      if (btnSavePairsText) btnSavePairsText.textContent = "Guardando...";
+    }
+
     try {
-      const res = await fetch('/api/pairs/update', {
+      const res = await fetch('/api/pairs/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pairs: selected })
       });
       const data = await res.json();
       if (data.success) {
-        logToTerminal(data.message, 'info');
+        logToTerminal(`✅ ${data.message}`, 'success');
+        if (btnSavePairsText) btnSavePairsText.textContent = "¡Pares Guardados!";
+        setTimeout(() => {
+          if (btnSavePairsText) btnSavePairsText.textContent = "Guardar Pares a Operar";
+        }, 2000);
+        return true;
       } else {
-        logToTerminal(data.message, 'warn');
+        logToTerminal(`⚠️ ${data.message}`, 'warn');
+        alert(data.message);
+        if (btnSavePairsText) btnSavePairsText.textContent = "Guardar Pares a Operar";
+        return false;
       }
     } catch (e) {
-      console.error("Error sincronizando pares:", e);
+      console.error("Error guardando pares:", e);
+      logToTerminal(`Error guardando pares: ${e}`, 'error');
+      if (btnSavePairsText) btnSavePairsText.textContent = "Guardar Pares a Operar";
+      return false;
+    } finally {
+      if (btnSavePairs) btnSavePairs.disabled = false;
     }
   }
 
@@ -131,41 +158,111 @@ document.addEventListener('DOMContentLoaded', () => {
   chkPairs.forEach(chk => {
     chk.addEventListener('change', () => {
       updateCheckboxUI();
-      syncSelectedPairs();
     });
   });
+
+  if (btnSavePairs) {
+    btnSavePairs.addEventListener('click', () => {
+      saveSelectedPairs();
+    });
+  }
 
   btnSelectNormal.addEventListener('click', () => {
     chkPairs.forEach(chk => {
       if (!chk.value.includes('-OTC')) {
         chk.checked = true;
+      } else {
+        chk.checked = false;
       }
     });
     updateCheckboxUI();
-    syncSelectedPairs();
   });
 
   btnSelectOtc.addEventListener('click', () => {
     chkPairs.forEach(chk => {
       if (chk.value.includes('-OTC')) {
         chk.checked = true;
+      } else {
+        chk.checked = false;
       }
     });
     updateCheckboxUI();
-    syncSelectedPairs();
   });
 
   btnSelectAll.addEventListener('click', () => {
     chkPairs.forEach(chk => chk.checked = true);
     updateCheckboxUI();
-    syncSelectedPairs();
   });
 
   btnDeselectAll.addEventListener('click', () => {
     chkPairs.forEach(chk => chk.checked = false);
     updateCheckboxUI();
-    syncSelectedPairs();
   });
+
+  // ==========================================
+  // BOTÓN GUARDAR CREDENCIALES IQ OPTION
+  // ==========================================
+  if (btnSaveIq) {
+    btnSaveIq.addEventListener('click', async () => {
+      const email = testEmail.value.trim();
+      const pass = testPass.value.trim();
+      const accountType = testAccount.value;
+
+      if (!email || !pass) {
+        alert("Ingresa correo y contraseña de IQ Option antes de guardar.");
+        return;
+      }
+
+      btnSaveIq.disabled = true;
+      if (btnSaveIqText) btnSaveIqText.textContent = "Guardando...";
+      iqStatusBadge.className = 'status-badge-iq';
+      iqStatusBadge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando y verificando...';
+
+      try {
+        const resp = await fetch('/api/iq/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email, password: pass, account_type: accountType })
+        });
+        const data = await resp.json();
+
+        if (data.success) {
+          iqStatusBadge.className = 'status-badge-iq connected';
+          iqStatusBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Conectado (${data.account_type})`;
+
+          iqTestResult.className = 'iq-test-result success';
+          iqTestResult.textContent = `✅ ${data.message}`;
+          iqTestResult.style.display = 'block';
+
+          accountModeEl.textContent = data.account_type;
+          if (data.balance) {
+            accountBalanceEl.textContent = `$${data.balance.toFixed(2)}`;
+          }
+
+          logToTerminal(data.message, 'success');
+          if (btnSaveIqText) btnSaveIqText.textContent = "¡Guardado con Éxito!";
+          setTimeout(() => {
+            if (btnSaveIqText) btnSaveIqText.textContent = "Guardar Credenciales";
+          }, 2000);
+        } else {
+          iqStatusBadge.className = 'status-badge-iq error';
+          iqStatusBadge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error';
+
+          iqTestResult.className = 'iq-test-result error';
+          iqTestResult.textContent = `❌ ${data.message}`;
+          iqTestResult.style.display = 'block';
+
+          logToTerminal(data.message, 'error');
+          if (btnSaveIqText) btnSaveIqText.textContent = "Guardar Credenciales";
+        }
+      } catch (err) {
+        logToTerminal(`Error guardando credenciales: ${err.message}`, 'error');
+        if (btnSaveIqText) btnSaveIqText.textContent = "Guardar Credenciales";
+      } finally {
+        btnSaveIq.disabled = false;
+      }
+    });
+  }
 
   // ==========================================
   // PRUEBA DE CONEXIÓN IQ OPTION
@@ -497,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!isBotRunning) {
       const count = updateCheckboxUI();
       if (count === 0) {
-        alert("⚠️ ATENCIÓN: Debes seleccionar al menos un par con el check antes de encender el bot.");
+        alert("⚠️ ATENCIÓN: Primero debes elegir los pares a operar y presionar el botón 'Guardar Pares a Operar'.");
         return;
       }
     }
@@ -507,6 +604,9 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const resp = await fetch(endpoint, { method: 'POST' });
       const result = await resp.json();
+      if (!result.success && !isBotRunning) {
+        alert(result.message);
+      }
       logToTerminal(result.message, result.success ? 'success' : 'error');
     } catch (e) {
       logToTerminal(`Error al cambiar estado del bot: ${e}`, 'error');
@@ -516,35 +616,47 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // GUARDAR CONFIGURACIÓN DE PARÁMETROS
+  // GUARDAR CONFIGURACIÓN DE PARÁMETROS & RIESGO
   // ==========================================
+  const cfgMultiplier = document.getElementById('cfg-multiplier');
+  const cfgStoploss = document.getElementById('cfg-stoploss');
+  const cfgTakeprofit = document.getElementById('cfg-takeprofit');
+  const btnSaveParamsText = document.getElementById('btn-save-params-text');
+
   configForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const selected = [];
-    chkPairs.forEach(chk => {
-      if (chk.checked) selected.push(chk.value);
-    });
+    if (btnSaveParamsText) btnSaveParamsText.textContent = "Guardando...";
 
     const payload = {
-      pairs: selected,
       timeframe: parseInt(cfgTimeframe.value),
       amount: parseFloat(cfgAmount.value),
       martingale: parseInt(cfgMartingale.value),
-      account_type: cfgAccount.value,
-      iq_email: testEmail.value.trim(),
-      iq_pass: testPass.value.trim()
+      martingale_multiplier: cfgMultiplier ? parseFloat(cfgMultiplier.value) : 2.2,
+      stop_loss: cfgStoploss ? parseFloat(cfgStoploss.value) : 20.0,
+      take_profit: cfgTakeprofit ? parseFloat(cfgTakeprofit.value) : 50.0,
+      account_type: testAccount ? testAccount.value : "PRACTICE"
     };
 
     try {
-      const resp = await fetch('/api/config', {
+      const resp = await fetch('/api/params/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const data = await resp.json();
-      logToTerminal(data.message, data.success ? 'success' : 'warn');
+      if (data.success) {
+        logToTerminal(`✅ ${data.message}`, 'success');
+        if (btnSaveParamsText) btnSaveParamsText.textContent = "¡Parámetros Guardados!";
+        setTimeout(() => {
+          if (btnSaveParamsText) btnSaveParamsText.textContent = "Guardar Parámetros de Riesgo";
+        }, 2000);
+      } else {
+        logToTerminal(`⚠️ ${data.message}`, 'warn');
+        if (btnSaveParamsText) btnSaveParamsText.textContent = "Guardar Parámetros de Riesgo";
+      }
     } catch (err) {
       logToTerminal(`Error guardando parámetros: ${err}`, 'error');
+      if (btnSaveParamsText) btnSaveParamsText.textContent = "Guardar Parámetros de Riesgo";
     }
   });
 

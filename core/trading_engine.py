@@ -4,7 +4,11 @@ Implementa la máquina de estados con análisis concurrente de hasta 20 pares:
 - 10 Pares Mercado Normal: EURUSD, GBPUSD, USDJPY, EURJPY, AUDUSD, USDCAD, USDCHF, EURGBP, NZDUSD, GBPJPY
 - 10 Pares Mercado OTC: EURUSD-OTC, GBPUSD-OTC, USDJPY-OTC, EURJPY-OTC, AUDUSD-OTC, USDCAD-OTC, USDCHF-OTC, NZDUSD-OTC, EURGBP-OTC, GBPJPY-OTC
 
-Actualización de precios instantánea al microsegundo / milisegundo mediante streaming de alta frecuencia (50ms).
+REGLA ESTRICTA DE OPERACIÓN SECUENCIAL:
+- El bot analiza todos los pares seleccionados en simultáneo.
+- En cuanto UN par genera señal, entra en CONFIRMING y luego IN_TRADE.
+- DURANTE CONFIRMING E IN_TRADE: Las demás señales se bloquean estrictamente (una señal a la vez).
+- Solo cuando la operación finaliza y se verifica el resultado (WIN/LOSS), el bot vuelve a analizar todos los pares.
 """
 
 import time
@@ -40,7 +44,14 @@ class TradingEngine:
         self.martingale_multiplier = self.config.MARTINGALE_MULTIPLIER
         self.current_martingale_step = 0
         
-        # Estados independientes por cada par seleccionado
+        # MÁQUINA DE ESTADOS GLOBAL SECUENCIAL (UNA SEÑAL A LA VEZ)
+        # Estados: 'SEARCHING', 'CONFIRMING', 'IN_TRADE'
+        self.engine_mode = "SEARCHING"
+        self.locked_pair: Optional[str] = None
+        self.pending_signal: Optional[Dict[str, Any]] = None
+        self.current_trade: Optional[Dict[str, Any]] = None
+        
+        # Estados de pares para la cuadrícula
         self.pairs_state: Dict[str, Dict[str, Any]] = {}
         self._init_pair_states()
         
@@ -69,8 +80,6 @@ class TradingEngine:
                 self.pairs_state[p_upper] = {
                     "pair": p_upper,
                     "state": "SEARCHING",
-                    "pending_signal": None,
-                    "current_trade": None,
                     "tick_price": 0.0,
                     "last_analyzed_time": 0,
                     "status_msg": "Buscando señal VIP...",
@@ -82,7 +91,6 @@ class TradingEngine:
             del self.pairs_state[k]
 
     def set_selected_pairs(self, pairs: List[str]) -> Tuple[bool, str]:
-        """Permite al administrador seleccionar los pares que desea analizar en simultáneo."""
         valid_pairs = [p.strip().upper() for p in pairs if p.strip()]
         if not valid_pairs:
             return False, "Debes seleccionar al menos un par de divisas."
@@ -98,7 +106,6 @@ class TradingEngine:
         return True, f"Se han seleccionado {len(self.selected_pairs)} pares para análisis en simultáneo."
 
     def set_active_pair(self, pair: str):
-        """Cambia el par destacado visualmente en el radar principal."""
         pair_upper = pair.upper()
         if pair_upper in self.selected_pairs or pair_upper in self.pairs_state:
             self.active_pair = pair_upper
@@ -114,20 +121,23 @@ class TradingEngine:
 
         success, msg = self.iq.connect()
         self.is_running = True
+        self.engine_mode = "SEARCHING"
+        self.locked_pair = None
+        self.pending_signal = None
+        self.current_trade = None
         self.current_amount = self.base_amount
         self.current_martingale_step = 0
         self._init_pair_states()
         
-        # Iniciar streaming de alta frecuencia en el broker
         self.iq.start_streams(self.selected_pairs, self.timeframe)
         
         pairs_count = len(self.selected_pairs)
-        self.current_status_message = f"Bot iniciado - Monitoreando {pairs_count} pares en simultáneo (Ticks instantáneos)..."
+        self.current_status_message = f"Bot iniciado - Monitoreando {pairs_count} pares en simultáneo (Una señal a la vez)..."
         
         balance = self.iq.get_balance()
         pairs_str = ", ".join(self.selected_pairs[:6]) + (f" (+{pairs_count - 6} más)" if pairs_count > 6 else "")
         self.telegram.notify_bot_status(True, pairs_str, self.iq.account_type, balance)
-        logger.info(f"Bot iniciado con {pairs_count} pares en simultáneo: {self.selected_pairs}")
+        logger.info(f"Bot iniciado con {pairs_count} pares en simultáneo (Modo Secuencial 1 a la vez): {self.selected_pairs}")
         return True, f"Bot encendido exitosamente con {pairs_count} pares en escaneo activo."
 
     def stop(self) -> Tuple[bool, str]:
@@ -136,9 +146,13 @@ class TradingEngine:
         
         self.is_running = False
         self.iq.stop_streams(self.timeframe)
+        self.engine_mode = "SEARCHING"
+        self.locked_pair = None
+        self.pending_signal = None
+        self.current_trade = None
+
         for p, st in self.pairs_state.items():
             st["state"] = "SEARCHING"
-            st["pending_signal"] = None
             st["status_msg"] = "Bot detenido"
         
         self.current_status_message = "Bot detenido por el usuario."
@@ -168,6 +182,8 @@ class TradingEngine:
             "pair": self.active_pair,
             "tick_price": self.current_tick_price,
             "seconds_left": self.seconds_left_in_candle,
+            "engine_mode": self.engine_mode,
+            "locked_pair": self.locked_pair,
             "prices": prices_map
         }
         dead_clients = set()
@@ -180,49 +196,47 @@ class TradingEngine:
 
     async def broadcast_status(self):
         """Envía el estado completo consolidado a los clientes conectados por WebSocket."""
-        active_state_data = self.pairs_state.get(self.active_pair, {})
-        featured_state = active_state_data.get("state", "SEARCHING")
-        featured_pending = active_state_data.get("pending_signal", None)
-        featured_trade = active_state_data.get("current_trade", None)
-        featured_price = active_state_data.get("tick_price", self.current_tick_price)
-
-        for p, st in self.pairs_state.items():
-            if st.get("state") in ["IN_TRADE", "CONFIRMING"]:
-                featured_state = st.get("state")
-                featured_pending = st.get("pending_signal")
-                featured_trade = st.get("current_trade")
-                self.active_pair = p
-                featured_price = st.get("tick_price", 0.0)
-                break
-
         pairs_overview = []
         for p in self.selected_pairs:
             st = self.pairs_state.get(p, {})
+            # Estado visible del par en la cuadrícula
+            if self.engine_mode != "SEARCHING" and self.locked_pair == p:
+                card_state = self.engine_mode
+                card_msg = "Confirmando vela..." if self.engine_mode == "CONFIRMING" else "Operación en curso..."
+            elif self.engine_mode != "SEARCHING" and self.locked_pair != p:
+                card_state = "PAUSED"
+                card_msg = f"Pausado ({self.locked_pair} activo)"
+            else:
+                card_state = "SEARCHING"
+                card_msg = st.get("status_msg", "Buscando...")
+
             pairs_overview.append({
                 "pair": p,
-                "state": st.get("state", "SEARCHING"),
+                "state": card_state,
                 "tick_price": st.get("tick_price", 0.0),
-                "status_msg": st.get("status_msg", "Buscando..."),
-                "signal": st.get("pending_signal", {}).get("direction") if st.get("pending_signal") else None,
+                "status_msg": card_msg,
+                "signal": self.pending_signal.get("direction") if (self.locked_pair == p and self.pending_signal) else None,
                 "is_active": (p == self.active_pair)
             })
 
         data = {
             "type": "full",
             "is_running": self.is_running,
-            "state": featured_state,
+            "engine_mode": self.engine_mode,
+            "state": self.engine_mode, # Para compatibilidad con radar existente
             "pair": self.active_pair,
+            "locked_pair": self.locked_pair,
             "selected_pairs": self.selected_pairs,
             "pairs_overview": pairs_overview,
             "timeframe": self.timeframe,
             "seconds_left": self.seconds_left_in_candle,
-            "tick_price": featured_price,
+            "tick_price": self.current_tick_price,
             "status_message": self.current_status_message,
             "balance": self.iq.get_balance(),
             "account_type": self.iq.account_type,
             "is_simulation": self.iq.is_simulation,
-            "pending_signal": featured_pending,
-            "current_trade": featured_trade,
+            "pending_signal": self.pending_signal,
+            "current_trade": self.current_trade,
             "stats": self.session_stats,
             "history": self.trade_history[-20:]
         }
@@ -237,7 +251,7 @@ class TradingEngine:
 
     async def run_loop(self):
         """Bucle infinito asíncrono con streaming instantáneo de alta frecuencia (50ms)."""
-        logger.info("Iniciando bucle de control de alta frecuencia (ticks instantáneos)...")
+        logger.info("Iniciando bucle de control secuencial de alta frecuencia...")
         last_strategy_second = -1
         last_tick_broadcast_time = 0.0
 
@@ -254,8 +268,6 @@ class TradingEngine:
                         p_state = self.pairs_state.setdefault(pair, {
                             "pair": pair,
                             "state": "SEARCHING",
-                            "pending_signal": None,
-                            "current_trade": None,
                             "tick_price": 0.0,
                             "last_analyzed_time": 0,
                             "status_msg": "Analizando...",
@@ -274,12 +286,12 @@ class TradingEngine:
                         last_tick_broadcast_time = now
 
                 # =========================================================
-                # 2. EVALUACIÓN DE ESTRATEGIA (CADA SEGUNDO EXACTO)
+                # 2. EVALUACIÓN DE ESTRATEGIA SECUENCIAL (CADA SEGUNDO)
                 # =========================================================
                 if current_int_sec != last_strategy_second:
                     last_strategy_second = current_int_sec
                     if self.is_running and self.selected_pairs:
-                        await self._tick_strategy()
+                        await self._tick_sequential_strategy()
                     else:
                         self.seconds_left_in_candle = 0
                         self.current_status_message = "Bot detenido - Esperando activación en el panel admin"
@@ -291,81 +303,89 @@ class TradingEngine:
             
             await asyncio.sleep(0.05)
 
-    async def _tick_strategy(self):
+    async def _tick_sequential_strategy(self):
+        """
+        Lógica Secuencial Estricta:
+        1. SEARCHING: Escanea todos los pares simultáneamente. Si uno da señal, se bloquea exclusivamente ese par.
+        2. CONFIRMING: Monitorea ÚNICAMENTE el par bloqueado hasta que cierre su vela.
+        3. IN_TRADE: Monitorea ÚNICAMENTE la operación abierta del par hasta la expiración.
+        4. RESULT: Procesa resultado. Solo tras cerrarse la operación, desbloquea y vuelve a analizar.
+        """
         server_ts = self.iq.get_server_timestamp()
         dt_server = datetime.fromtimestamp(server_ts)
         time_str = dt_server.strftime("%H:%M:%S")
 
-        total_pairs = len(self.selected_pairs)
-        active_confirming = 0
-        active_trades = 0
+        # =========================================================
+        # FASE 1: SEARCHING (Todos los pares se analizan hasta que APARECE UNA SEÑAL)
+        # =========================================================
+        if self.engine_mode == "SEARCHING":
+            self.current_status_message = f"[{time_str}] Escaneando {len(self.selected_pairs)} pares en simultáneo ({self.seconds_left_in_candle}s restantes)"
+            
+            for pair in self.selected_pairs:
+                p_state = self.pairs_state.get(pair)
+                if not p_state:
+                    continue
 
-        for pair in self.selected_pairs:
-            p_state = self.pairs_state.get(pair)
-            if not p_state:
-                continue
+                candles = self.iq.get_candles(pair, self.timeframe, 60)
+                if not candles or len(candles) < 10:
+                    continue
 
-            p_state["seconds_left"] = self.seconds_left_in_candle
-
-            # Obtener velas para análisis técnico
-            candles = self.iq.get_candles(pair, self.timeframe, 60)
-            if not candles or len(candles) < 10:
-                continue
-
-            latest_candle = candles[-1]
-            # Si hay precio de vela, coordinar
-            if p_state["tick_price"] == 0:
-                p_state["tick_price"] = float(latest_candle.get('close', 0.0))
-
-            # =========================================================
-            # ESTADO 1: SEARCHING (Buscando señal SCRIPT VIP en este par)
-            # =========================================================
-            if p_state["state"] == "SEARCHING":
-                p_state["status_msg"] = f"Buscando señal ({self.seconds_left_in_candle}s)"
-                
                 closed_candle = candles[-2]
                 closed_candle_time = closed_candle.get('from', 0)
-                
+
+                # Si la vela cerró recientemente
                 if closed_candle_time != p_state["last_analyzed_time"]:
                     p_state["last_analyzed_time"] = closed_candle_time
                     analysis = self.indicator.analyze_candles(candles[:-1])
-                    
+
                     if analysis.get('signal'):
                         direction = analysis['signal']
                         candle_dt_str = datetime.fromtimestamp(closed_candle_time).strftime("%H:%M:%S")
+
+                        # ¡BLOQUEAR MOTOR EN ESTE PAR! (Una señal a la vez)
+                        self.locked_pair = pair
+                        self.active_pair = pair
+                        self.engine_mode = "CONFIRMING"
                         
-                        p_state["pending_signal"] = {
+                        self.pending_signal = {
                             "pair": pair,
                             "direction": direction,
                             "detected_at": time_str,
                             "candle_time": candle_dt_str,
                             "signal_candle_from": closed_candle_time,
-                            "confirm_candle_from": latest_candle.get('from', 0)
+                            "confirm_candle_from": candles[-1].get('from', 0)
                         }
-                        p_state["state"] = "CONFIRMING"
-                        p_state["status_msg"] = f"¡SEÑAL {direction}! Confirmando..."
-                        
-                        self.active_pair = pair
-                        tf_label = "1M" if self.timeframe == 60 else f"{self.timeframe//60}M"
-                        logger.info(f"Señal VIP detectada: {pair} {direction}. Esperando confirmación.")
-                        self.telegram.notify_pre_signal(pair, direction, tf_label, candle_dt_str)
 
-            # =========================================================
-            # ESTADO 2: CONFIRMING (Esperando vela a favor en este par)
-            # =========================================================
-            elif p_state["state"] == "CONFIRMING":
-                active_confirming += 1
-                direction = p_state["pending_signal"]["direction"]
-                p_state["status_msg"] = f"Confirmando {direction} ({self.seconds_left_in_candle}s)"
-                
-                if self.seconds_left_in_candle <= 1:
-                    confirm_candle = latest_candle
+                        tf_label = "1M" if self.timeframe == 60 else f"{self.timeframe//60}M"
+                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando confirmación (Otros pares en pausa)..."
+                        logger.info(f"Señal VIP detectada: {pair} {direction}. Bloqueando escaneo en {pair} hasta resultado.")
+                        
+                        self.telegram.notify_pre_signal(pair, direction, tf_label, candle_dt_str)
+                        # Salir inmediatamente del bucle: NO permitir ninguna otra señal
+                        break
+
+        # =========================================================
+        # FASE 2: CONFIRMING (Exclusivo para el par bloqueado)
+        # =========================================================
+        elif self.engine_mode == "CONFIRMING":
+            pair = self.locked_pair
+            direction = self.pending_signal["direction"]
+            self.current_status_message = (
+                f"[{time_str}] CONFIRMANDO SEÑAL {direction} EN {pair}: "
+                f"Quedan {self.seconds_left_in_candle}s para evaluar la vela."
+            )
+
+            # En el último segundo de la vela (<= 1s para segundo 00)
+            if self.seconds_left_in_candle <= 1:
+                candles = self.iq.get_candles(pair, self.timeframe, 10)
+                if candles and len(candles) >= 2:
+                    confirm_candle = candles[-1]
                     c_open = confirm_candle['open']
                     c_close = confirm_candle['close']
-                    
+
                     is_confirmed = False
                     reason = ""
-                    
+
                     if direction == "CALL":
                         if c_close > c_open:
                             is_confirmed = True
@@ -376,16 +396,16 @@ class TradingEngine:
                             is_confirmed = True
                         else:
                             reason = f"Vela alcista/doji (Open: {c_open}, Close: {c_close})"
-                    
+
                     if is_confirmed:
                         entry_time_str = datetime.fromtimestamp(server_ts + 1).strftime("%H:%M:%S")
                         trade_amount = self.current_amount
-                        
+
                         logger.info(f"¡Vela confirmada! Ejecutando {direction} en {pair} a las {entry_time_str}")
                         ok, order_id, msg = self.iq.buy_option(pair, trade_amount, direction, self.expiration)
-                        
+
                         if ok:
-                            p_state["current_trade"] = {
+                            self.current_trade = {
                                 "id": order_id,
                                 "pair": pair,
                                 "direction": direction,
@@ -396,9 +416,8 @@ class TradingEngine:
                                 "start_ts": server_ts,
                                 "end_ts": server_ts + (self.expiration * 60)
                             }
-                            p_state["state"] = "IN_TRADE"
-                            p_state["status_msg"] = f"Operación {direction} en curso..."
-                            self.active_pair = pair
+                            self.engine_mode = "IN_TRADE"
+                            self.current_status_message = f"OPERACIÓN EN CURSO: {pair} {direction} ${trade_amount} (Expiración 1M)"
                             
                             self.telegram.notify_entry(
                                 pair=pair,
@@ -410,97 +429,113 @@ class TradingEngine:
                             )
                         else:
                             logger.error(f"Error al enviar orden en {pair}: {msg}")
-                            p_state["status_msg"] = f"Error orden: {msg}"
-                            p_state["state"] = "SEARCHING"
-                            p_state["pending_signal"] = None
+                            # Si falló la orden, desbloquear y volver a buscar
+                            self.engine_mode = "SEARCHING"
+                            self.locked_pair = None
+                            self.pending_signal = None
                     else:
-                        logger.info(f"Señal en {pair} no confirmada: {reason}")
+                        logger.info(f"Señal en {pair} no confirmada: {reason}. Reanudando escaneo general.")
                         self.telegram.notify_confirmation_failed(pair, direction, reason)
-                        p_state["state"] = "SEARCHING"
-                        p_state["pending_signal"] = None
+                        # No confirmada: desbloquear y volver a analizar todos los pares
+                        self.engine_mode = "SEARCHING"
+                        self.locked_pair = None
+                        self.pending_signal = None
 
-            # =========================================================
-            # ESTADO 3: IN_TRADE (Operación abierta a 1 minuto en este par)
-            # =========================================================
-            elif p_state["state"] == "IN_TRADE":
-                active_trades += 1
-                cur_trade = p_state["current_trade"]
-                remaining = cur_trade["end_ts"] - server_ts
-                trade_dir = cur_trade["direction"]
-                p_state["status_msg"] = f"Operación {trade_dir} ({max(0, remaining)}s)"
-                
-                if remaining <= 0:
-                    p_state["status_msg"] = "Verificando resultado con broker..."
-                    await asyncio.sleep(1.5)
-                    
-                    order_id = cur_trade["id"]
-                    result, profit, _, _ = self.iq.check_result(order_id)
-                    close_time_str = datetime.fromtimestamp(self.iq.get_server_timestamp()).strftime("%H:%M:%S")
-                    
-                    fresh_candles = self.iq.get_candles(pair, 60, 5)
-                    close_price = fresh_candles[-1]['close'] if fresh_candles else p_state["tick_price"]
-                    entry_price = cur_trade["entry_price"]
-                    
-                    if result == "WIN":
-                        self.session_stats["wins"] += 1
-                        self.session_stats["net_profit"] += profit
+        # =========================================================
+        # FASE 3: IN_TRADE (Exclusivo: espera hasta el cierre exacto)
+        # =========================================================
+        elif self.engine_mode == "IN_TRADE":
+            pair = self.locked_pair
+            cur_trade = self.current_trade
+            remaining = cur_trade["end_ts"] - server_ts
+            trade_dir = cur_trade["direction"]
+
+            self.current_status_message = (
+                f"[{time_str}] OPERACIÓN EN CURSO: {pair} {trade_dir} ${cur_trade['amount']} - "
+                f"Cierre en: {max(0, remaining)}s"
+            )
+
+            if remaining <= 0:
+                self.current_status_message = f"[{time_str}] Verificando resultado de {pair} con el broker..."
+                await asyncio.sleep(1.5)
+
+                order_id = cur_trade["id"]
+                result, profit, _, _ = self.iq.check_result(order_id)
+                close_time_str = datetime.fromtimestamp(self.iq.get_server_timestamp()).strftime("%H:%M:%S")
+
+                fresh_candles = self.iq.get_candles(pair, 60, 5)
+                close_price = fresh_candles[-1]['close'] if fresh_candles else self.current_tick_price
+                entry_price = cur_trade["entry_price"]
+
+                if result == "WIN":
+                    self.session_stats["wins"] += 1
+                    self.session_stats["net_profit"] += profit
+                    self.current_amount = self.base_amount
+                    self.current_martingale_step = 0
+                elif result == "LOSS":
+                    self.session_stats["losses"] += 1
+                    lost_amount = cur_trade["amount"]
+                    self.session_stats["net_profit"] -= lost_amount
+                    profit = -lost_amount
+
+                    if self.current_martingale_step < self.martingale_steps:
+                        self.current_martingale_step += 1
+                        self.current_amount = round(self.current_amount * self.martingale_multiplier, 2)
+                    else:
                         self.current_amount = self.base_amount
                         self.current_martingale_step = 0
-                    elif result == "LOSS":
-                        self.session_stats["losses"] += 1
-                        lost_amount = cur_trade["amount"]
-                        self.session_stats["net_profit"] -= lost_amount
-                        profit = -lost_amount
-                        
-                        if self.current_martingale_step < self.martingale_steps:
-                            self.current_martingale_step += 1
-                            self.current_amount = round(self.current_amount * self.martingale_multiplier, 2)
-                        else:
-                            self.current_amount = self.base_amount
-                            self.current_martingale_step = 0
-                    else:
-                        self.session_stats["equals"] += 1
+                else:
+                    self.session_stats["equals"] += 1
 
-                    self.session_stats["total_trades"] += 1
-                    tot = self.session_stats["wins"] + self.session_stats["losses"]
-                    if tot > 0:
-                        self.session_stats["winrate"] = round((self.session_stats["wins"] / tot) * 100, 1)
+                self.session_stats["total_trades"] += 1
+                tot = self.session_stats["wins"] + self.session_stats["losses"]
+                if tot > 0:
+                    self.session_stats["winrate"] = round((self.session_stats["wins"] / tot) * 100, 1)
 
-                    trade_record = {
-                        "id": order_id,
-                        "pair": pair,
-                        "direction": trade_dir,
-                        "result": result,
-                        "profit": round(profit, 2),
-                        "entry_time": cur_trade["entry_time"],
-                        "close_time": close_time_str,
-                        "entry_price": entry_price,
-                        "close_price": close_price,
-                        "amount": cur_trade["amount"],
-                        "martingale_step": self.current_martingale_step
-                    }
-                    self.trade_history.append(trade_record)
-                    
-                    self.telegram.notify_result(
-                        pair=pair,
-                        direction=trade_dir,
-                        result=result,
-                        entry_time=cur_trade["entry_time"],
-                        close_time=close_time_str,
-                        entry_price=entry_price,
-                        close_price=close_price,
-                        profit=profit,
-                        stats=self.session_stats
-                    )
-                    
-                    logger.info(f"Operación finalizada {pair}: {result} (${profit:.2f}). Saldo neto: ${self.session_stats['net_profit']:.2f}")
-                    p_state["state"] = "SEARCHING"
-                    p_state["pending_signal"] = None
-                    p_state["current_trade"] = None
+                trade_record = {
+                    "id": order_id,
+                    "pair": pair,
+                    "direction": trade_dir,
+                    "result": result,
+                    "profit": round(profit, 2),
+                    "entry_time": cur_trade["entry_time"],
+                    "close_time": close_time_str,
+                    "entry_price": entry_price,
+                    "close_price": close_price,
+                    "amount": cur_trade["amount"],
+                    "martingale_step": self.current_martingale_step
+                }
+                self.trade_history.append(trade_record)
 
-        if active_trades > 0:
-            self.current_status_message = f"[{time_str}] {active_trades} operación(es) en curso | Monitoreando {total_pairs} pares."
-        elif active_confirming > 0:
-            self.current_status_message = f"[{time_str}] Confirmando {active_confirming} señal(es) VIP | Monitoreando {total_pairs} pares."
-        else:
-            self.current_status_message = f"[{time_str}] Escaneando {total_pairs} pares en simultáneo ({self.timeframe}s) - Vela: {self.seconds_left_in_candle}s restantes"
+                self.telegram.notify_result(
+                    pair=pair,
+                    direction=trade_dir,
+                    result=result,
+                    entry_time=cur_trade["entry_time"],
+                    close_time=close_time_str,
+                    entry_price=entry_price,
+                    close_price=close_price,
+                    profit=profit,
+                    stats=self.session_stats
+                )
+
+                logger.info(f"Operación finalizada {pair}: {result} (${profit:.2f}). Saldo neto: ${self.session_stats['net_profit']:.2f}")
+
+                # ¡SOLO AHORA SE DESBLOQUEA Y SE VUELVE A ANALIZAR TODOS LOS PARES!
+                self.engine_mode = "SEARCHING"
+                self.locked_pair = None
+                self.pending_signal = None
+                self.current_trade = None
+                self.current_status_message = f"Operación finalizada ({result}). Reanudando análisis simultáneo de todos los pares..."
+
+    def update_config(self, pairs: List[str], timeframe: int, amount: float, martingale: int, account_type: str):
+        if pairs:
+            self.set_selected_pairs(pairs)
+        self.timeframe = int(timeframe)
+        self.base_amount = float(amount)
+        if self.current_martingale_step == 0:
+            self.current_amount = self.base_amount
+        self.martingale_steps = int(martingale)
+        if account_type.upper() != self.iq.account_type:
+            self.iq.change_balance(account_type.upper())
+        logger.info(f"Configuración actualizada: Pares={len(self.selected_pairs)}, TF={self.timeframe}s, Monto=${self.base_amount}, Martingala={self.martingale_steps}, Cuenta={self.iq.account_type}")

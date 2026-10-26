@@ -50,6 +50,31 @@ async def index_page(request: Request):
     """Página de inicio tipo Linktree con logo oficial de Trader 4 Less"""
     return templates.TemplateResponse(request=request, name="index.html")
 
+@router.get("/signals", response_class=HTMLResponse)
+@router.get("/senales", response_class=HTMLResponse)
+async def signals_page(request: Request):
+    """Sala de señales VIP pública en tiempo real con WebSocket"""
+    engine = request.app.state.engine
+    return templates.TemplateResponse(
+        request=request,
+        name="signals.html",
+        context={"engine": engine}
+    )
+
+@router.get("/api/signals/live")
+async def api_signals_live(request: Request):
+    """Retorna el estado de la señal activa y estadísticas para consumo público"""
+    engine = request.app.state.engine
+    return {
+        "is_running": engine.is_running,
+        "engine_mode": engine.engine_mode,
+        "locked_pair": engine.locked_pair,
+        "pending_signal": engine.pending_signal,
+        "current_trade": engine.current_trade,
+        "stats": engine.session_stats,
+        "history": engine.trade_history[-20:]
+    }
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     if is_authenticated(request):

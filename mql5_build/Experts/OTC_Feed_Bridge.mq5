@@ -24,13 +24,31 @@ const string OTC_PAIRS[10] = {
 };
 
 //--- Variables Globales de Estado
-bool   g_license_valid = false;
-string g_client_name   = "";
-string g_expires_at    = "";
-datetime g_last_check  = 0;
-ulong  g_ticks_count   = 0;
-int    g_seed_index    = -1; // -1 = cargar _Symbol primero, luego 0..9
-bool   g_all_seeded    = false;
+bool     g_license_valid = false;
+string   g_client_name   = "";
+string   g_expires_at    = "";
+datetime g_last_check    = 0;
+ulong    g_ticks_count   = 0;
+
+// Variables de control de ticks y barras en vivo para los 10 pares
+long     g_last_tick_msc[10];
+datetime g_bar_time[10];
+double   g_bar_open[10];
+double   g_bar_high[10];
+double   g_bar_low[10];
+double   g_bar_close[10];
+long     g_bar_vol[10];
+bool     g_pair_seeded[10];
+int      g_bg_seed_idx   = 0;
+
+int GetPairIndex(string sym)
+{
+   for(int i = 0; i < 10; i++)
+   {
+      if(OTC_PAIRS[i] == sym) return i;
+   }
+   return -1;
+}
 
 //+------------------------------------------------------------------+
 //| Inicialización del Expert Advisor                                |
@@ -49,6 +67,20 @@ int OnInit()
    // 2. Crear los 10 Símbolos Personalizados OTC si no existen
    CreateCustomOTCSymbols();
 
+   // Inicializar estados de los 10 pares
+   for(int i = 0; i < 10; i++)
+   {
+      g_last_tick_msc[i] = 0;
+      g_bar_time[i] = 0;
+      g_bar_open[i] = 0.0;
+      g_bar_high[i] = 0.0;
+      g_bar_low[i] = 0.0;
+      g_bar_close[i] = 0.0;
+      g_bar_vol[i] = 0;
+      g_pair_seeded[i] = (iBars(OTC_PAIRS[i], PERIOD_M1) >= 40);
+   }
+   g_bg_seed_idx = 0;
+
    // 3. Configurar el gráfico para mostrar velas completas con colores institucionales
    ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
    ChartSetInteger(0, CHART_AUTOSCROLL, true);
@@ -58,11 +90,11 @@ int OnInit()
    ChartSetInteger(0, CHART_COLOR_CHART_DOWN, C'255, 23, 68');
    ChartRedraw(0);
 
-   // 4. Inicializar Timer de alta frecuencia
+   // 4. Inicializar Timer de alta frecuencia (500 ms)
    EventSetMillisecondTimer(InpTimerMs);
 
    // 5. Dibujar Panel Informativo
-   DrawHUD("🟢 CONECTADO AL VPS", clrSpringGreen, "Cargando velas en vivo...");
+   DrawHUD("🟢 CONECTADO AL VPS", clrSpringGreen, "Iniciando streaming en vivo...");
 
    Print("OTC Feed Bridge iniciado con éxito en milisegundos. Licencia activa para: ", g_client_name);
    return(INIT_SUCCEEDED);
@@ -96,36 +128,29 @@ void OnTimer()
       g_last_check = TimeCurrent();
    }
 
-   // 1. Carga progresiva no bloqueante de historial (1 par por ciclo para evitar bloqueos)
-   if(!g_all_seeded)
+   // 1. Si el símbolo actual no tiene historial en MT5, sembrarlo una sola vez
+   string curSym = _Symbol;
+   int curIdx = GetPairIndex(curSym);
+   if(curIdx >= 0 && !g_pair_seeded[curIdx])
    {
-      if(g_seed_index == -1)
+      if(iBars(curSym, PERIOD_M1) < 40)
       {
-         string curSym = _Symbol;
-         if(StringFind(curSym, "_OTC") >= 0)
+         SeedHistoryCandles(curSym);
+      }
+      g_pair_seeded[curIdx] = true;
+   }
+   else if(g_bg_seed_idx < 10)
+   {
+      // En segundo plano, sembrar otros pares que no tengan barras (1 por ciclo)
+      if(!g_pair_seeded[g_bg_seed_idx])
+      {
+         if(iBars(OTC_PAIRS[g_bg_seed_idx], PERIOD_M1) < 40)
          {
-            SeedHistoryCandles(curSym);
-            ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
-            ChartSetInteger(0, CHART_AUTOSCROLL, true);
-            ChartNavigate(0, CHART_END, 0);
-            ChartRedraw(0);
+            SeedHistoryCandles(OTC_PAIRS[g_bg_seed_idx]);
          }
-         g_seed_index = 0;
+         g_pair_seeded[g_bg_seed_idx] = true;
       }
-      else if(g_seed_index < 10)
-      {
-         string symToSeed = OTC_PAIRS[g_seed_index];
-         if(symToSeed != _Symbol)
-         {
-            SeedHistoryCandles(symToSeed);
-         }
-         g_seed_index++;
-      }
-      else
-      {
-         g_all_seeded = true;
-         Print("✅ Historial de todos los pares OTC cargado con éxito.");
-      }
+      g_bg_seed_idx++;
    }
 
    // 2. Solicitar datos OTC al VPS e inyectar en ticks y velas
@@ -334,12 +359,17 @@ void FetchAndFeedOTCData()
    char result[];
    string result_headers;
 
-   int res = WebRequest("GET", url, "", 3000, post_data, result, result_headers);
+   int res = WebRequest("GET", url, "", 6000, post_data, result, result_headers);
    if(res != 200) return;
 
    string response = CharArrayToString(result);
    datetime global_server_ts = (datetime)ExtractDoubleValue(response, 0, "\"timestamp\":");
    if(global_server_ts == 0) global_server_ts = TimeCurrent();
+
+   long now_sec = (long)global_server_ts;
+   long now_msc_base = now_sec * 1000 + (long)(GetTickCount64() % 1000);
+
+   bool current_chart_updated = false;
 
    // Inyectar datos en cada uno de los 10 pares OTC
    for(int i = 0; i < 10; i++)
@@ -355,12 +385,23 @@ void FetchAndFeedOTCData()
 
       if(bid > 0)
       {
-         // 1. Inyectar Tick en Market Watch
+         double spread = (StringFind(sym, "JPY") >= 0) ? 0.02 : 0.0001;
+         double final_ask = (ask > 0) ? ask : (bid + spread);
+         double final_last = (last > 0) ? last : bid;
+
+         // Asegurar time_msc estrictamente ascendente (exigencia de MT5 para ticks reales)
+         long tick_msc = now_msc_base;
+         if(tick_msc <= g_last_tick_msc[i])
+            tick_msc = g_last_tick_msc[i] + 1;
+         g_last_tick_msc[i] = tick_msc;
+
+         // 1. Inyectar Tick en Market Watch con milisegundos válidos
          MqlTick ticks[1];
-         ticks[0].time = global_server_ts;
+         ticks[0].time = (datetime)(tick_msc / 1000);
+         ticks[0].time_msc = tick_msc;
          ticks[0].bid = bid;
-         ticks[0].ask = ask > 0 ? ask : bid;
-         ticks[0].last = last > 0 ? last : bid;
+         ticks[0].ask = final_ask;
+         ticks[0].last = final_last;
          ticks[0].volume = 1;
          ticks[0].flags = TICK_FLAG_BID | TICK_FLAG_ASK | TICK_FLAG_LAST;
 
@@ -368,38 +409,59 @@ void FetchAndFeedOTCData()
          g_ticks_count++;
 
          // 2. Actualizar o formar la vela M1 actual en vivo en el gráfico
-         datetime bar_ts = global_server_ts - (global_server_ts % 60);
+         datetime bar_ts = (datetime)(now_sec - (now_sec % 60));
          MqlRates live_rate[1];
          live_rate[0].time = bar_ts;
-         live_rate[0].open = last;
-         live_rate[0].high = last;
-         live_rate[0].low  = last;
-         live_rate[0].close = last;
-         live_rate[0].tick_volume = 1;
          live_rate[0].spread = 10;
          live_rate[0].real_volume = 0;
 
-         MqlRates last_bar[1];
-         if(CopyRates(sym, PERIOD_M1, 0, 1, last_bar) > 0)
+         if(g_bar_time[i] == bar_ts && g_bar_open[i] > 0)
          {
-            if(last_bar[0].time == bar_ts)
-            {
-               live_rate[0].open = last_bar[0].open;
-               live_rate[0].high = MathMax(last_bar[0].high, last);
-               live_rate[0].low  = MathMin(last_bar[0].low, last);
-               live_rate[0].tick_volume = last_bar[0].tick_volume + 1;
-            }
+            g_bar_high[i]  = MathMax(g_bar_high[i], final_last);
+            g_bar_low[i]   = MathMin(g_bar_low[i], final_last);
+            g_bar_close[i] = final_last;
+            g_bar_vol[i]++;
+
+            live_rate[0].open  = g_bar_open[i];
+            live_rate[0].high  = g_bar_high[i];
+            live_rate[0].low   = g_bar_low[i];
+            live_rate[0].close = g_bar_close[i];
+            live_rate[0].tick_volume = g_bar_vol[i];
+         }
+         else
+         {
+            // Nueva barra M1 iniciada
+            g_bar_time[i]  = bar_ts;
+            g_bar_open[i]  = final_last;
+            g_bar_high[i]  = final_last;
+            g_bar_low[i]   = final_last;
+            g_bar_close[i] = final_last;
+            g_bar_vol[i]   = 1;
+
+            live_rate[0].open  = final_last;
+            live_rate[0].high  = final_last;
+            live_rate[0].low   = final_last;
+            live_rate[0].close = final_last;
+            live_rate[0].tick_volume = 1;
          }
 
          CustomRatesUpdate(sym, live_rate, 1);
+
+         if(sym == _Symbol)
+            current_chart_updated = true;
       }
    }
 
-   // Actualizar HUD periódicamente
-   if(g_ticks_count % 30 == 0)
+   // Si el gráfico activo recibió tick, forzar redibujado de MT5
+   if(current_chart_updated)
    {
-      DrawHUD("🟢 EN STREAMING ACTIVO", clrSpringGreen, "Ticks recibidos: " + IntegerToString(g_ticks_count));
       ChartRedraw(0);
+   }
+
+   // Actualizar HUD periódicamente
+   if(g_ticks_count % 15 == 0)
+   {
+      DrawHUD("🟢 EN STREAMING ACTIVO", clrSpringGreen, "Ticks en vivo: " + IntegerToString(g_ticks_count));
    }
 }
 

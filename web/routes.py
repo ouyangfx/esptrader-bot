@@ -94,7 +94,10 @@ def is_authenticated(request: Request) -> bool:
 
 @router.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
-    """Página de inicio tipo Linktree con logo oficial de Trader 4 Less"""
+    """Página de inicio: si entra por el subdominio 'analisis.' abre directamente la sala de señales VIP"""
+    host = request.headers.get("host", "").lower()
+    if "analisis" in host:
+        return await signals_page(request)
     return templates.TemplateResponse(request=request, name="index.html")
 
 @router.get("/signals", response_class=HTMLResponse)

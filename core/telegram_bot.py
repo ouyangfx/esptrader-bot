@@ -139,7 +139,7 @@ class TelegramNotifier:
             f"📉 <b>Precio Cierre:</b> {close_price:.5f}\n"
             f"💵 <b>Resultado:</b> <b>{p_text}</b>\n"
             f"{stats_str}\n"
-            f"🌐 <a href='https://trader4less.com'>Trader 4 Less</a> | @traderfxapp"
+            f"🌐 <a href='https://analisis.tradingsnr.info'>Trader 4 Less - Sala VIP M5</a> | @traderfxapp"
         )
         return self.send_message(msg)
 

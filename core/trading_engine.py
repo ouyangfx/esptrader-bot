@@ -235,7 +235,7 @@ class TradingEngine:
             "pending_signal": self.pending_signal,
             "current_trade": self.current_trade,
             "stats": self.session_stats,
-            "history": self.trade_history[-20:]
+            "history": self.trade_history[-10:]
         }
         
         dead_clients = set()

@@ -48,6 +48,9 @@ async def lifespan(app: FastAPI):
     # Iniciar conexión inicial IQ Option
     iq_client.connect()
     
+    # Auto-encender el motor de análisis y trading
+    engine.start()
+    
     # Tarea en background
     task = asyncio.create_task(engine.run_loop())
     

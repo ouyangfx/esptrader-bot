@@ -121,7 +121,7 @@ async def api_signals_live(request: Request):
         "pending_signal": engine.pending_signal,
         "current_trade": engine.current_trade,
         "stats": engine.session_stats,
-        "history": engine.trade_history[-20:]
+        "history": engine.trade_history[-10:]
     }
 
 @router.get("/api/candles")

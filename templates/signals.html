@@ -1178,9 +1178,10 @@
 
         // Historial
         if (data.history && data.history.length > 0) {
-          historyCount.textContent = `${data.history.length} señales`;
+          const lastTen = data.history.slice(-10);
+          historyCount.textContent = `${lastTen.length} señales`;
           let html = '';
-          data.history.slice().reverse().forEach(t => {
+          lastTen.slice().reverse().forEach(t => {
             const isWin = t.result === 'WIN';
             const isLoss = t.result === 'LOSS';
             const resClass = isWin ? 'pill-itm' : (isLoss ? 'pill-otm' : '');

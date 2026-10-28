@@ -120,6 +120,8 @@ async def api_signals_live(request: Request):
         "locked_pair": engine.locked_pair,
         "pending_signal": engine.pending_signal,
         "current_trade": engine.current_trade,
+        "last_signal_event": engine.last_signal_event,
+        "live_signals_feed": engine.live_signals_feed[-10:],
         "stats": engine.session_stats,
         "history": engine.trade_history[-10:]
     }
@@ -190,6 +192,25 @@ async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe:
             "entry_price": float(candles[-1]['close']) if candles else 0.0,
             "state": "CONFIRMING"
         }
+    elif engine.last_signal_event and engine.last_signal_event.get("pair") == pair:
+        fibo_data = {
+            "fibo_50": engine.last_signal_event.get("fibo_50"),
+            "fibo_618": engine.last_signal_event.get("fibo_618"),
+            "direction": engine.last_signal_event.get("direction"),
+            "entry_price": engine.last_signal_event.get("entry_price"),
+            "state": engine.last_signal_event.get("status")
+        }
+    else:
+        for sig in reversed(engine.live_signals_feed):
+            if sig.get("pair") == pair and sig.get("fibo_50"):
+                fibo_data = {
+                    "fibo_50": sig.get("fibo_50"),
+                    "fibo_618": sig.get("fibo_618"),
+                    "direction": sig.get("direction"),
+                    "entry_price": sig.get("entry_price"),
+                    "state": sig.get("status")
+                }
+                break
 
     return {
         "pair": pair,

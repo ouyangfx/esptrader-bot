@@ -188,31 +188,40 @@
       border: 1px solid rgba(0, 245, 155, 0.4);
     }
 
-    .signal-details-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1.6fr 1fr;
-      gap: 20px;
-      align-items: center;
-    }
-
-    .signal-pair-box {
+    .signal-hero-wrapper {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 16px;
+    }
+
+    .signal-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .signal-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
     }
 
     .signal-pair-symbol {
-      font-size: 2rem;
+      font-size: 2.1rem;
       font-weight: 800;
       font-family: 'JetBrains Mono', monospace;
       letter-spacing: 1px;
+      color: #fff;
     }
 
     .signal-direction-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      font-size: 1rem;
+      font-size: 1.05rem;
       font-weight: 800;
       padding: 8px 16px;
       border-radius: 10px;
@@ -223,59 +232,214 @@
       background: rgba(0, 245, 155, 0.15);
       color: #00f59b;
       border: 1px solid rgba(0, 245, 155, 0.4);
+      box-shadow: 0 0 14px rgba(0, 245, 155, 0.2);
     }
 
     .badge-put {
       background: rgba(255, 71, 87, 0.15);
       color: #ff4757;
       border: 1px solid rgba(255, 71, 87, 0.4);
+      box-shadow: 0 0 14px rgba(255, 71, 87, 0.2);
     }
 
-    .signal-meta-box {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    .badge-event-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 50px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: rgba(0, 136, 204, 0.15);
+      color: #00aaff;
+      border: 1px solid rgba(0, 136, 204, 0.35);
+    }
+
+    .signal-grid-boxes {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .sig-info-box {
       background: rgba(255, 255, 255, 0.03);
-      padding: 14px 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.85rem;
-    }
-    .meta-lbl { color: #8e9bb0; }
-    .meta-val { font-weight: 700; color: #fff; font-family: 'JetBrains Mono', monospace; }
-
-    .signal-countdown-box {
+      padding: 14px 16px;
       display: flex;
       flex-direction: column;
+      justify-content: center;
+    }
+
+    .sig-info-box.box-countdown {
       align-items: center;
       text-align: center;
+    }
+
+    .sig-box-lbl {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #8e9bb0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .sig-box-val {
+      font-size: 1.3rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+    }
+
+    .sig-box-val.highlight-expire {
+      color: #ffd700;
+    }
+
+    .sig-box-sub {
+      font-size: 0.72rem;
+      color: #64748b;
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Fibonacci Sniper Card */
+    .fibo-sniper-box {
+      background: linear-gradient(135deg, rgba(0, 210, 255, 0.08) 0%, rgba(255, 215, 0, 0.08) 100%);
+      border: 1px solid rgba(0, 210, 255, 0.3);
+      border-radius: 14px;
+      padding: 16px 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+
+    .fibo-sniper-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .fibo-sniper-title {
+      font-size: 0.88rem;
+      font-weight: 800;
+      color: #00d2ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .fibo-sniper-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      background: rgba(0, 245, 155, 0.15);
+      color: #00f59b;
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 245, 155, 0.3);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .fibo-sniper-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .fibo-card {
+      background: rgba(8, 12, 22, 0.85);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .fibo-card-50 {
+      border: 1px solid rgba(0, 210, 255, 0.35);
+      border-left: 4px solid #00d2ff;
+    }
+
+    .fibo-card-618 {
+      border: 1px solid rgba(255, 215, 0, 0.35);
+      border-left: 4px solid #ffd700;
+    }
+
+    .fibo-pct {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .fibo-card-50 .fibo-pct { color: #00d2ff; }
+    .fibo-card-618 .fibo-pct { color: #ffd700; }
+
+    .fibo-price-val {
+      font-size: 1.45rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+    }
+
+    .fibo-role {
+      font-size: 0.72rem;
+      color: #8e9bb0;
+    }
+
+    .fibo-sniper-tip {
       background: rgba(255, 255, 255, 0.03);
-      padding: 16px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px dashed rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.45;
+    }
+
+    .fibo-sniper-tip i {
+      color: #ffd700;
+      font-size: 1.1rem;
+      margin-top: 2px;
+    }
+
+    .radar-searching-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      background: rgba(0, 210, 255, 0.08);
+      border: 1px solid rgba(0, 210, 255, 0.2);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #00d2ff;
     }
 
     .cd-title {
       font-size: 0.72rem;
       font-weight: 700;
       color: #8e9bb0;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .cd-number {
-      font-size: 2.2rem;
+      font-size: 1.8rem;
       font-weight: 800;
       color: #00d2ff;
       font-family: 'JetBrains Mono', monospace;
       line-height: 1;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .cd-bar-wrap {
@@ -604,13 +768,15 @@
     .pill-call { background: rgba(0, 245, 155, 0.15); color: #00f59b; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
     .pill-put { background: rgba(255, 71, 87, 0.15); color: #ff4757; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
 
-    @media (max-width: 800px) {
-      .signal-details-grid { grid-template-columns: 1fr; }
+    @media (max-width: 900px) {
+      .signal-grid-boxes { grid-template-columns: 1fr 1fr; }
+      .fibo-sniper-grid { grid-template-columns: 1fr; }
       .signals-stats-row { grid-template-columns: 1fr 1fr; }
       .chart-header-bar { flex-direction: column; align-items: flex-start; }
       .chart-header-right { width: 100%; justify-content: space-between; }
     }
     @media (max-width: 500px) {
+      .signal-grid-boxes { grid-template-columns: 1fr; }
       .signals-stats-row { grid-template-columns: 1fr; }
       .signals-navbar { flex-direction: column; gap: 12px; }
       .nav-actions { width: 100%; justify-content: space-between; }
@@ -664,40 +830,84 @@
         </p>
       </div>
 
-      <!-- VIEW: ACTIVE SIGNAL / IN_TRADE -->
-      <div id="view-active-signal" class="signal-details-grid" style="display: none;">
-        <div class="signal-pair-box">
-          <span class="signal-pair-symbol" id="sig-pair">EURUSD-OTC</span>
-          <div class="signal-direction-badge badge-call" id="sig-direction-badge">
-            <i class="fa-solid fa-arrow-trend-up" id="sig-dir-icon"></i>
-            <span id="sig-direction-text">COMPRA (CALL)</span>
+      <!-- VIEW: ACTIVE SIGNAL / IN_TRADE / LAST TELEGRAM SIGNAL -->
+      <div id="view-active-signal" class="signal-hero-wrapper" style="display: none;">
+        <div class="signal-header-row">
+          <div class="signal-header-left">
+            <span class="signal-pair-symbol" id="sig-pair">EURUSD-OTC</span>
+            <div class="signal-direction-badge badge-call" id="sig-direction-badge">
+              <i class="fa-solid fa-arrow-trend-up" id="sig-dir-icon"></i>
+              <span id="sig-direction-text">COMPRA (CALL)</span>
+            </div>
+            <span class="badge-event-type" id="sig-event-type-badge">
+              <i class="fa-brands fa-telegram"></i> SEÑAL EN VIVO TELEGRAM
+            </span>
+          </div>
+
+          <div class="radar-searching-strip" id="radar-searching-strip" style="display: none;">
+            <i class="fa-solid fa-satellite-dish fa-spin-pulse"></i>
+            <span>Escaneando 4 pares con Filtro M15. Al confirmarse nueva señal se actualizará con alerta sonora.</span>
           </div>
         </div>
 
-        <div class="signal-meta-box">
-          <div class="meta-row">
-            <span class="meta-lbl">Expiración:</span>
-            <span class="meta-val">5 Minutos (M5)</span>
+        <!-- 4 Key Grid Execution Boxes -->
+        <div class="signal-grid-boxes">
+          <div class="sig-info-box">
+            <span class="sig-box-lbl"><i class="fa-solid fa-play"></i> Hora Entrada</span>
+            <span class="sig-box-val" id="sig-entry-time">--:--:--</span>
+            <span class="sig-box-sub">Apertura M5 (Seg 00)</span>
           </div>
-          <div class="meta-row">
-            <span class="meta-lbl">Precio Tick:</span>
-            <span class="meta-val" id="sig-tick-price">0.00000</span>
+
+          <div class="sig-info-box">
+            <span class="sig-box-lbl"><i class="fa-solid fa-hourglass-end"></i> Hora Expiración</span>
+            <span class="sig-box-val highlight-expire" id="sig-expire-time">--:--:--</span>
+            <span class="sig-box-sub">Término Vela 5 Minutos (M5)</span>
           </div>
-          <div class="meta-row">
-            <span class="meta-lbl">Hora Entrada:</span>
-            <span class="meta-val" id="sig-entry-time">--:--:--</span>
+
+          <div class="sig-info-box">
+            <span class="sig-box-lbl"><i class="fa-solid fa-tag"></i> Precio Entrada</span>
+            <span class="sig-box-val" id="sig-entry-price">0.00000</span>
+            <span class="sig-box-sub">Tick Actual: <span id="sig-tick-price" style="color: #00d2ff;">0.00000</span></span>
           </div>
-          <div class="meta-row">
-            <span class="meta-lbl">Estado Ciclo:</span>
-            <span class="meta-val" id="sig-cycle-state">Confirmando</span>
+
+          <div class="sig-info-box box-countdown">
+            <span class="sig-box-lbl" id="cd-title">Tiempo Restante</span>
+            <span class="cd-number" id="sig-countdown">00s</span>
+            <div class="cd-bar-wrap">
+              <div class="cd-bar-fill" id="sig-progress" style="width: 100%;"></div>
+            </div>
           </div>
         </div>
 
-        <div class="signal-countdown-box">
-          <span class="cd-title" id="cd-title">TIEMPO RESTANTE</span>
-          <span class="cd-number" id="sig-countdown">00s</span>
-          <div class="cd-bar-wrap">
-            <div class="cd-bar-fill" id="sig-progress" style="width: 100%;"></div>
+        <!-- Cuadro Destacado Fibonacci Sniper para Mayor Efectividad -->
+        <div class="fibo-sniper-box">
+          <div class="fibo-sniper-header">
+            <div class="fibo-sniper-title">
+              <i class="fa-solid fa-crosshairs"></i>
+              <span>Zona de Retroceso Fibonacci (Entrada Sniper Alta Efectividad)</span>
+            </div>
+            <div class="fibo-sniper-badge">
+              <i class="fa-solid fa-shield-halved"></i> Confluencia M15 Verificada
+            </div>
+          </div>
+
+          <div class="fibo-sniper-grid">
+            <div class="fibo-card fibo-card-50">
+              <span class="fibo-pct">Nivel Retroceso 50.0%</span>
+              <span class="fibo-price-val" id="sig-fibo-50">0.00000</span>
+              <span class="fibo-role">Punto de Entrada Óptimo</span>
+            </div>
+
+            <div class="fibo-card fibo-card-618">
+              <span class="fibo-pct">Nivel Retroceso 61.8%</span>
+              <span class="fibo-price-val" id="sig-fibo-618">0.00000</span>
+              <span class="fibo-role">Zona Sniper (Máxima Efectividad de Acierto)</span>
+            </div>
+          </div>
+
+          <div class="fibo-sniper-tip">
+            <i class="fa-solid fa-lightbulb"></i>
+            <span><strong>Recomendación Operativa VIP:</strong> Para mayor efectividad de acierto, esperar el retroceso del precio a los niveles de Fibonacci <strong>50.0%</strong> o <strong>61.8%</strong> (calculado uniendo las mechas de la vela de señal y confirmación en M5) antes de entrar. La expiración siempre es al <strong>término de la vela de 5 minutos</strong>.</span>
           </div>
         </div>
       </div>
@@ -798,12 +1008,12 @@
       </div>
     </section>
 
-    <!-- HISTORY TABLE -->
+    <!-- HISTORY TABLE & TELEGRAM LIVE SIGNALS -->
     <section class="history-section">
       <div class="history-header">
         <div class="history-title">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-          <span>Historial de Señales en Vivo</span>
+          <i class="fa-brands fa-telegram" style="color: #0088cc;"></i>
+          <span>Señales Enviadas a Telegram en Vivo (@traderfxapp)</span>
         </div>
         <span class="meta-lbl" id="history-count">0 señales</span>
       </div>
@@ -814,17 +1024,18 @@
             <tr>
               <th>Hora</th>
               <th>Par</th>
+              <th>Tipo Alerta</th>
               <th>Dirección</th>
-              <th>Apertura</th>
-              <th>Cierre</th>
-              <th>Expiración</th>
-              <th>Resultado</th>
+              <th>Precio Entrada</th>
+              <th>Hora Expiración</th>
+              <th>Retroceso Fibo (50% / 61.8%)</th>
+              <th>Estado / Resultado</th>
             </tr>
           </thead>
           <tbody id="signals-tbody">
             <tr>
-              <td colspan="7" style="text-align: center; color: #8e9bb0; padding: 25px; font-style: italic;">
-                Esperando la próxima señal del algoritmo...
+              <td colspan="8" style="text-align: center; color: #8e9bb0; padding: 25px; font-style: italic;">
+                Cargando señales del algoritmo en tiempo real...
               </td>
             </tr>
           </tbody>
@@ -854,12 +1065,17 @@
       const sigDirectionBadge = document.getElementById('sig-direction-badge');
       const sigDirectionText = document.getElementById('sig-direction-text');
       const sigDirIcon = document.getElementById('sig-dir-icon');
-      const sigTickPrice = document.getElementById('sig-tick-price');
+      const sigEventTypeBadge = document.getElementById('sig-event-type-badge');
       const sigEntryTime = document.getElementById('sig-entry-time');
-      const sigCycleState = document.getElementById('sig-cycle-state');
+      const sigExpireTime = document.getElementById('sig-expire-time');
+      const sigEntryPrice = document.getElementById('sig-entry-price');
+      const sigTickPrice = document.getElementById('sig-tick-price');
       const sigCountdown = document.getElementById('sig-countdown');
       const sigProgress = document.getElementById('sig-progress');
       const cdTitle = document.getElementById('cd-title');
+      const sigFibo50 = document.getElementById('sig-fibo-50');
+      const sigFibo618 = document.getElementById('sig-fibo-618');
+      const radarSearchingStrip = document.getElementById('radar-searching-strip');
 
       const statWinrate = document.getElementById('stat-winrate');
       const statWins = document.getElementById('stat-wins');
@@ -868,6 +1084,27 @@
 
       const signalsTbody = document.getElementById('signals-tbody');
       const historyCount = document.getElementById('history-count');
+
+      let lastPlayedSignalKey = null;
+
+      function playAlertChime() {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+          osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.18, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.35);
+        } catch (e) {}
+      }
 
       // Reloj local
       setInterval(() => {
@@ -878,8 +1115,22 @@
       // 1. Inicializar TradingView Lightweight Charts
       initTvChart();
 
-      // 2. Conectar WebSocket
+      // 2. Cargar datos iniciales de inmediato y establecer polling de respaldo
+      fetchLiveData();
+      setInterval(fetchLiveData, 2500);
+
+      // 3. Conectar WebSocket para streaming en tiempo real
       connectSignalsWS();
+
+      async function fetchLiveData() {
+        try {
+          const resp = await fetch('/api/signals/live');
+          if (resp.ok) {
+            const data = await resp.json();
+            handleData(data);
+          }
+        } catch (e) {}
+      }
 
       function initTvChart() {
         const container = document.getElementById('tv-chart-container');
@@ -1058,11 +1309,11 @@
         if (data.type === 'tick') {
           if (data.tick_price) {
             const dec = (data.pair && data.pair.includes('JPY')) ? 3 : 5;
-            sigTickPrice.textContent = parseFloat(data.tick_price).toFixed(dec);
+            const pStr = parseFloat(data.tick_price).toFixed(dec);
+            sigTickPrice.textContent = pStr;
 
-            // Si el par que está tickeando es el par visible en el gráfico, actualizar última vela
             if (data.pair === currentChartPair && currentCandles.length > 0 && candleSeries) {
-              document.getElementById('chart-live-price').textContent = parseFloat(data.tick_price).toFixed(dec);
+              document.getElementById('chart-live-price').textContent = pStr;
               const last = currentCandles[currentCandles.length - 1];
               const p = parseFloat(data.tick_price);
               last.close = p;
@@ -1088,57 +1339,40 @@
           viewActiveSignal.style.display = 'none';
           statusTitleTextEl.textContent = 'SISTEMA EN ESPERA';
           statusTagEl.className = 'status-tag-main status-searching';
-          waitingDescText.textContent = 'El bot se encuentra en espera de activación por el administrador en el panel.';
+          waitingDescText.textContent = 'El bot se encuentra en espera de activación por el administrador.';
           return;
         }
 
-        // Si hay señal pendiente o trade activo, cambiar automáticamente el gráfico al par activo si el usuario no lo forzó
-        const activeSignalPair = (data.pending_signal && data.pending_signal.pair) || (data.current_trade && data.current_trade.pair);
-        if (activeSignalPair && activeSignalPair !== currentChartPair) {
-          switchChartPair(activeSignalPair);
-        }
+        // Determinar qué señal mostrar en el Hero Card
+        let activeEvent = null;
+        let eventCategory = 'SEARCHING';
 
         if (mode === 'CONFIRMING' && data.pending_signal) {
-          viewWaiting.style.display = 'none';
-          viewActiveSignal.style.display = 'grid';
-
-          statusTitleTextEl.textContent = `¡SEÑAL ${data.pending_signal.direction} EN ${data.pending_signal.pair}! CONFIRMANDO...`;
-          statusTagEl.className = 'status-tag-main status-confirming';
-          cdTitle.textContent = 'CIERRE DE VELA EN';
-
-          sigPair.textContent = data.pending_signal.pair;
-          const dir = data.pending_signal.direction;
-          if (dir === 'CALL') {
-            sigDirectionBadge.className = 'signal-direction-badge badge-call';
-            sigDirectionText.textContent = 'COMPRA (CALL)';
-            sigDirIcon.className = 'fa-solid fa-arrow-trend-up';
-          } else {
-            sigDirectionBadge.className = 'signal-direction-badge badge-put';
-            sigDirectionText.textContent = 'VENTA (PUT)';
-            sigDirIcon.className = 'fa-solid fa-arrow-trend-down';
-          }
-
-          sigEntryTime.textContent = 'Apertura M5 (Seg 00)';
-          sigCycleState.textContent = 'Confirmando Vela';
-
-          // Actualizar líneas Fibonacci en el gráfico
-          if (data.pending_signal.fibo_50 && data.pending_signal.fibo_618) {
-            updateFiboLines({
-              fibo_50: data.pending_signal.fibo_50,
-              fibo_618: data.pending_signal.fibo_618
-            });
-          }
-
+          activeEvent = data.pending_signal;
+          eventCategory = 'CONFIRMING';
         } else if (mode === 'IN_TRADE' && data.current_trade) {
+          activeEvent = data.current_trade;
+          eventCategory = 'IN_TRADE';
+        } else if (data.last_signal_event) {
+          activeEvent = data.last_signal_event;
+          eventCategory = 'LAST_EVENT';
+        } else if (data.live_signals_feed && data.live_signals_feed.length > 0) {
+          activeEvent = data.live_signals_feed[data.live_signals_feed.length - 1];
+          eventCategory = 'LAST_EVENT';
+        }
+
+        if (activeEvent) {
           viewWaiting.style.display = 'none';
-          viewActiveSignal.style.display = 'grid';
+          viewActiveSignal.style.display = 'flex';
 
-          statusTitleTextEl.textContent = `OPERACIÓN ACTIVA (5M) EN ${data.current_trade.pair}`;
-          statusTagEl.className = 'status-tag-main status-in-trade';
-          cdTitle.textContent = 'EXPIRACIÓN 5M EN';
+          const pair = activeEvent.pair || 'EURUSD-OTC';
+          const dec = pair.includes('JPY') ? 3 : 5;
+          const dir = activeEvent.direction || 'CALL';
+          const entryP = activeEvent.entry_price ? parseFloat(activeEvent.entry_price).toFixed(dec) : '--';
+          const fibo50 = activeEvent.fibo_50 ? parseFloat(activeEvent.fibo_50).toFixed(dec) : '--';
+          const fibo618 = activeEvent.fibo_618 ? parseFloat(activeEvent.fibo_618).toFixed(dec) : '--';
 
-          sigPair.textContent = data.current_trade.pair;
-          const dir = data.current_trade.direction;
+          sigPair.textContent = pair;
           if (dir === 'CALL') {
             sigDirectionBadge.className = 'signal-direction-badge badge-call';
             sigDirectionText.textContent = 'COMPRA (CALL)';
@@ -1149,15 +1383,52 @@
             sigDirIcon.className = 'fa-solid fa-arrow-trend-down';
           }
 
-          sigEntryTime.textContent = data.current_trade.entry_time;
-          sigCycleState.textContent = 'Operación 5M en Curso';
+          sigEntryTime.textContent = activeEvent.entry_time || 'Apertura Seg 00';
+          sigExpireTime.textContent = activeEvent.expire_time || activeEvent.close_time || '5 Minutos (M5)';
+          sigEntryPrice.textContent = entryP;
+          sigFibo50.textContent = fibo50;
+          sigFibo618.textContent = fibo618;
 
-          // Actualizar líneas Fibonacci
-          if (data.current_trade.fibo_50 && data.current_trade.fibo_618) {
+          // Sonido de alerta si es señal nueva
+          const sigKey = `${pair}_${dir}_${activeEvent.time || activeEvent.entry_time}`;
+          if ((eventCategory === 'CONFIRMING' || eventCategory === 'IN_TRADE') && sigKey !== lastPlayedSignalKey) {
+            playAlertChime();
+            lastPlayedSignalKey = sigKey;
+          }
+
+          if (eventCategory === 'CONFIRMING') {
+            statusTitleTextEl.textContent = `¡SEÑAL ${dir} EN ${pair}! CONFIRMANDO VELA M5...`;
+            statusTagEl.className = 'status-tag-main status-confirming';
+            sigEventTypeBadge.className = 'badge-event-type status-confirming';
+            sigEventTypeBadge.innerHTML = '<i class="fa-solid fa-bolt"></i> PRE-SEÑAL EN CONFIRMACIÓN';
+            cdTitle.textContent = 'CIERRE DE VELA EN';
+            radarSearchingStrip.style.display = 'none';
+          } else if (eventCategory === 'IN_TRADE') {
+            statusTitleTextEl.textContent = `OPERACIÓN ACTIVA (5M) EN ${pair}`;
+            statusTagEl.className = 'status-tag-main status-in-trade';
+            sigEventTypeBadge.className = 'badge-event-type status-in-trade';
+            sigEventTypeBadge.innerHTML = '<i class="fa-solid fa-fire"></i> OPERACIÓN 5M EN CURSO';
+            cdTitle.textContent = 'EXPIRACIÓN 5M EN';
+            radarSearchingStrip.style.display = 'none';
+          } else {
+            statusTitleTextEl.textContent = 'ESCANEANDO 4 PARES EN SIMULTÁNEO (M5)';
+            statusTagEl.className = 'status-tag-main status-searching';
+            sigEventTypeBadge.className = 'badge-event-type';
+            sigEventTypeBadge.innerHTML = '<i class="fa-brands fa-telegram"></i> ÚLTIMA SEÑAL EMITIDA A TELEGRAM';
+            cdTitle.textContent = 'TIEMPO VELA M5';
+            radarSearchingStrip.style.display = 'flex';
+          }
+
+          // Sincronizar Fibo HUD en el gráfico
+          if (activeEvent.fibo_50 && activeEvent.fibo_618) {
             updateFiboLines({
-              fibo_50: data.current_trade.fibo_50,
-              fibo_618: data.current_trade.fibo_618
+              fibo_50: activeEvent.fibo_50,
+              fibo_618: activeEvent.fibo_618
             });
+          }
+
+          if ((eventCategory === 'CONFIRMING' || eventCategory === 'IN_TRADE') && pair !== currentChartPair) {
+            switchChartPair(pair);
           }
 
         } else {
@@ -1165,7 +1436,6 @@
           viewActiveSignal.style.display = 'none';
           statusTitleTextEl.textContent = 'ESCANEANDO MERCADO EN SIMULTÁNEO';
           statusTagEl.className = 'status-tag-main status-searching';
-          waitingDescText.textContent = `Analizando 4 pares principales con Filtro Confluencia Alta M15. Próxima señal aparecerá aquí automáticamente.`;
         }
 
         // Estadísticas
@@ -1176,27 +1446,55 @@
           statTotal.textContent = data.stats.total_trades;
         }
 
-        // Historial
-        if (data.history && data.history.length > 0) {
-          const lastTen = data.history.slice(-10);
+        // Renderizar tabla con las señales emitidas a Telegram en vivo (últimas 10)
+        const feed = (data.live_signals_feed && data.live_signals_feed.length > 0) ? data.live_signals_feed : data.history;
+        if (feed && feed.length > 0) {
+          const lastTen = feed.slice(-10);
           historyCount.textContent = `${lastTen.length} señales`;
           let html = '';
           lastTen.slice().reverse().forEach(t => {
-            const isWin = t.result === 'WIN';
-            const isLoss = t.result === 'LOSS';
-            const resClass = isWin ? 'pill-itm' : (isLoss ? 'pill-otm' : '');
-            const resText = isWin ? 'ITM ✅' : (isLoss ? 'OTM ❌' : 'EMPATE ⚖️');
-            const dirClass = t.direction === 'CALL' ? 'pill-call' : 'pill-put';
+            const pair = t.pair || 'EURUSD-OTC';
+            const dec = pair.includes('JPY') ? 3 : 5;
+            const dir = t.direction || 'CALL';
+            const dirClass = dir === 'CALL' ? 'pill-call' : 'pill-put';
+            
+            let typeBadge = '';
+            const tType = t.type || 'SEÑAL_VIP_M5';
+            if (tType === 'PRE_SEÑAL') {
+              typeBadge = '<span style="color: #ffd700; font-weight: 700;"><i class="fa-solid fa-bolt"></i> Pre-Señal</span>';
+            } else if (tType === 'OPERACION_M5') {
+              typeBadge = '<span style="color: #00d2ff; font-weight: 700;"><i class="fa-solid fa-fire"></i> Entrada 5M</span>';
+            } else {
+              typeBadge = '<span style="color: #00f59b; font-weight: 700;"><i class="fa-brands fa-telegram"></i> Señal M5</span>';
+            }
+
+            let resHtml = '';
+            const status = t.status || t.result || 'CONFIRMADA';
+            if (status.includes('WIN') || status.includes('ITM')) {
+              resHtml = '<span class="pill-itm">ITM ✅</span>';
+            } else if (status.includes('LOSS') || status.includes('OTM')) {
+              resHtml = '<span class="pill-otm">OTM ❌</span>';
+            } else if (status.includes('CONFIRM')) {
+              resHtml = '<span style="color: #ffd700; font-weight: 700;">Confirmando</span>';
+            } else {
+              resHtml = `<span style="color: #00d2ff; font-weight: 700;">${status}</span>`;
+            }
+
+            const ep = t.entry_price ? parseFloat(t.entry_price).toFixed(dec) : '--';
+            const expTime = t.expire_time || t.close_time || '5 Minutos';
+            const f50 = t.fibo_50 ? parseFloat(t.fibo_50).toFixed(dec) : '--';
+            const f618 = t.fibo_618 ? parseFloat(t.fibo_618).toFixed(dec) : '--';
 
             html += `
               <tr>
-                <td>${t.entry_time}</td>
-                <td><strong>${t.pair}</strong></td>
-                <td><span class="${dirClass}">${t.direction}</span></td>
-                <td>${(t.entry_price || 0).toFixed(5)}</td>
-                <td>${(t.close_price || 0).toFixed(5)}</td>
-                <td>5 Minutos</td>
-                <td class="${resClass}">${resText}</td>
+                <td>${t.time || t.entry_time || '--:--:--'}</td>
+                <td><strong>${pair}</strong></td>
+                <td>${typeBadge}</td>
+                <td><span class="${dirClass}">${dir}</span></td>
+                <td>${ep}</td>
+                <td><span style="color: #ffd700; font-weight: 700;">${expTime}</span></td>
+                <td><span style="color: #00d2ff;">${f50}</span> / <span style="color: #ffd700;">${f618}</span></td>
+                <td>${resHtml}</td>
               </tr>
             `;
           });

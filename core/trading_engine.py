@@ -61,12 +61,107 @@ class TradingEngine:
         self.db = DatabaseManager()
         self.trade_history: List[Dict[str, Any]] = self.db.load_trades()
         self.session_stats = self.db.get_stats()
+        self.live_signals_feed: List[Dict[str, Any]] = []
+        self.last_signal_event: Optional[Dict[str, Any]] = None
+        self._init_live_feed()
         
         # Streaming WebSocket a clientes web
         self.websocket_listeners = set()
         self.current_status_message = "Bot detenido"
         self.current_tick_price = 0.0
         self.seconds_left_in_candle = 0
+
+    def _scan_recent_historical_signals(self):
+        """Si live_signals_feed está vacío, analiza las velas de los pares para precargar las últimas señales reales calculadas con Fibonacci 50% y 61.8%."""
+        try:
+            detected = []
+            for pair in self.selected_pairs:
+                candles = self.iq.get_candles(pair, self.timeframe, 50)
+                if not candles or len(candles) < 35:
+                    continue
+                dec = 3 if "JPY" in pair else 5
+                for i in range(35, len(candles) - 1):
+                    sub = candles[:i+1]
+                    res = self.indicator.analyze_candles(sub)
+                    sig = res.get("signal")
+                    if sig in ("CALL", "PUT"):
+                        sig_c = candles[i]
+                        prev_c = candles[i-1]
+                        sig_time = datetime.fromtimestamp(sig_c.get('from', 0)).strftime("%H:%M:%S")
+                        expire_time = datetime.fromtimestamp(sig_c.get('from', 0) + (self.expiration * 60)).strftime("%H:%M:%S")
+                        
+                        s_min = float(sig_c.get('min', sig_c.get('low', sig_c['close'])))
+                        s_max = float(sig_c.get('max', sig_c.get('high', sig_c['close'])))
+                        p_min = float(prev_c.get('min', prev_c.get('low', prev_c['close'])))
+                        p_max = float(prev_c.get('max', prev_c.get('high', prev_c['close'])))
+                        o_min = min(s_min, p_min)
+                        o_max = max(s_max, p_max)
+                        r = max(1e-5, o_max - o_min)
+                        
+                        if sig == "CALL":
+                            f50 = o_max - (r * 0.50)
+                            f618 = o_max - (r * 0.618)
+                        else:
+                            f50 = o_min + (r * 0.50)
+                            f618 = o_min + (r * 0.618)
+
+                        res_label = "CONFIRMADA"
+                        if i + 1 < len(candles):
+                            next_c = candles[i+1]
+                            c_close = float(next_c['close'])
+                            c_open = float(next_c['open'])
+                            is_win = (sig == "CALL" and c_close > c_open) or (sig == "PUT" and c_close < c_open)
+                            res_label = "ITM ✅" if is_win else "OTM ❌"
+
+                        item = {
+                            "id": int(sig_c.get('from', 0)),
+                            "time": sig_time,
+                            "pair": pair,
+                            "direction": sig,
+                            "type": "SEÑAL_VIP_M5",
+                            "status": res_label,
+                            "entry_time": sig_time,
+                            "expire_time": expire_time,
+                            "entry_price": round(float(sig_c['close']), dec),
+                            "close_price": round(float(candles[min(i+1, len(candles)-1)]['close']), dec),
+                            "fibo_50": round(f50, dec),
+                            "fibo_618": round(f618, dec),
+                            "tip": "Esperar retroceso a zona Fibo 50% - 61.8% para mayor efectividad (Sniper)",
+                            "confluence": "Confluencia M15 Verificada"
+                        }
+                        detected.append(item)
+
+            if detected:
+                detected.sort(key=lambda x: x["id"])
+                self.live_signals_feed = detected[-10:]
+                self.last_signal_event = self.live_signals_feed[-1]
+                logger.info(f"Señales precargadas en el feed en vivo ({len(self.live_signals_feed)} señales detectadas). Última: {self.last_signal_event['pair']} {self.last_signal_event['direction']}")
+        except Exception as e:
+            logger.error(f"Error precargando señales históricas: {e}")
+
+    def _init_live_feed(self):
+        """Inicializa el feed de señales con los últimos registros de la base de datos."""
+        for t in self.trade_history[-10:]:
+            item = {
+                "id": t.get("id"),
+                "time": t.get("entry_time", "--:--:--"),
+                "pair": t.get("pair"),
+                "direction": t.get("direction"),
+                "type": "RESULTADO",
+                "status": t.get("result"),
+                "profit": t.get("profit", 0.0),
+                "entry_time": t.get("entry_time"),
+                "close_time": t.get("close_time"),
+                "expire_time": t.get("close_time"),
+                "entry_price": t.get("entry_price"),
+                "close_price": t.get("close_price"),
+                "fibo_50": t.get("fibo_50"),
+                "fibo_618": t.get("fibo_618"),
+                "tip": f"Resultado: {t.get('result')}"
+            }
+            self.live_signals_feed.append(item)
+        if self.live_signals_feed:
+            self.last_signal_event = self.live_signals_feed[-1]
 
     def _init_pair_states(self):
         """Inicializa o actualiza el estado de cada par seleccionado."""
@@ -127,6 +222,9 @@ class TradingEngine:
         self._init_pair_states()
         
         self.iq.start_streams(self.selected_pairs, self.timeframe)
+        
+        if not self.live_signals_feed:
+            self._scan_recent_historical_signals()
         
         pairs_count = len(self.selected_pairs)
         self.current_status_message = f"Bot iniciado - Monitoreando {pairs_count} pares en simultáneo (Una señal a la vez)..."
@@ -234,6 +332,8 @@ class TradingEngine:
             "is_simulation": self.iq.is_simulation,
             "pending_signal": self.pending_signal,
             "current_trade": self.current_trade,
+            "last_signal_event": self.last_signal_event,
+            "live_signals_feed": self.live_signals_feed[-10:],
             "stats": self.session_stats,
             "history": self.trade_history[-10:]
         }
@@ -394,6 +494,28 @@ class TradingEngine:
                             "confluence_info": conf_reason
                         }
 
+                        expire_ts = closed_candle_time + (self.expiration * 60) + 300
+                        expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
+
+                        sig_event = {
+                            "id": int(time.time()),
+                            "time": time_str,
+                            "pair": pair,
+                            "direction": direction,
+                            "type": "PRE_SEÑAL",
+                            "status": "CONFIRMANDO VELA M5",
+                            "entry_time": "Próxima vela (Seg 00)",
+                            "expire_time": expire_time_str,
+                            "entry_price": float(closed_candle['close']),
+                            "fibo_50": round(init_fibo_50, 5),
+                            "fibo_618": round(init_fibo_618, 5),
+                            "tip": "Esperar retroceso a zona Fibo 50% - 61.8% para mayor efectividad (Sniper)",
+                            "confluence": conf_reason
+                        }
+                        self.last_signal_event = sig_event
+                        self.live_signals_feed.append(sig_event)
+                        self.live_signals_feed = self.live_signals_feed[-10:]
+
                         tf_label = "5M"
                         self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando confirmación M5 (Otros pares en pausa)..."
                         logger.info(f"Señal VIP detectada: {pair} {direction}. Bloqueando escaneo en {pair} hasta resultado.")
@@ -480,6 +602,25 @@ class TradingEngine:
                             self.engine_mode = "IN_TRADE"
                             self.current_status_message = f"OPERACIÓN EN CURSO (5M): {pair} {direction} ${trade_amount} (Cierre: {expire_time_str})"
                             
+                            sig_event = {
+                                "id": order_id,
+                                "time": entry_time_str,
+                                "pair": pair,
+                                "direction": direction,
+                                "type": "OPERACION_M5",
+                                "status": "OPERACIÓN EN CURSO (M5)",
+                                "entry_time": entry_time_str,
+                                "expire_time": expire_time_str,
+                                "entry_price": c_close,
+                                "fibo_50": round(fibo_50, 5),
+                                "fibo_618": round(fibo_618, 5),
+                                "tip": "Retroceso Fibo 50% - 61.8% activo. Expiración al término de la vela M5.",
+                                "amount": trade_amount
+                            }
+                            self.last_signal_event = sig_event
+                            self.live_signals_feed.append(sig_event)
+                            self.live_signals_feed = self.live_signals_feed[-10:]
+
                             self.telegram.notify_entry(
                                 pair=pair,
                                 direction=direction,
@@ -608,6 +749,27 @@ class TradingEngine:
                 }
                 self.trade_history.append(trade_record)
                 self.db.save_trade(trade_record)
+
+                sig_event = {
+                    "id": order_id,
+                    "time": close_time_str,
+                    "pair": pair,
+                    "direction": trade_dir,
+                    "type": "RESULTADO",
+                    "status": result,
+                    "profit": round(profit, 2),
+                    "entry_time": cur_trade["entry_time"],
+                    "close_time": close_time_str,
+                    "expire_time": close_time_str,
+                    "entry_price": entry_price,
+                    "close_price": close_price,
+                    "fibo_50": cur_trade.get("fibo_50"),
+                    "fibo_618": cur_trade.get("fibo_618"),
+                    "tip": f"Operación finalizada: {result} (${profit:+.2f})"
+                }
+                self.last_signal_event = sig_event
+                self.live_signals_feed.append(sig_event)
+                self.live_signals_feed = self.live_signals_feed[-10:]
 
                 self.telegram.notify_result(
                     pair=pair,

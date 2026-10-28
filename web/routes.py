@@ -93,23 +93,22 @@ def is_authenticated(request: Request) -> bool:
     return token in active_sessions
 
 @router.get("/", response_class=HTMLResponse)
-async def index_page(request: Request):
-    """Página de inicio: si entra por el subdominio 'analisis.' abre directamente la sala de señales VIP"""
-    host = request.headers.get("host", "").lower()
-    if "analisis" in host:
-        return await signals_page(request)
-    return templates.TemplateResponse(request=request, name="index.html")
-
 @router.get("/signals", response_class=HTMLResponse)
 @router.get("/senales", response_class=HTMLResponse)
 async def signals_page(request: Request):
-    """Sala de señales VIP pública en tiempo real con WebSocket"""
+    """Portada principal con Gráfico TradingView en Vivo, Señales VIP y niveles de Fibonacci"""
     engine = request.app.state.engine
     return templates.TemplateResponse(
         request=request,
         name="signals.html",
         context={"engine": engine}
     )
+
+@router.get("/portal", response_class=HTMLResponse)
+@router.get("/links", response_class=HTMLResponse)
+async def portal_page(request: Request):
+    """Portal Linktree secundario"""
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @router.get("/api/signals/live")
 async def api_signals_live(request: Request):
@@ -123,6 +122,82 @@ async def api_signals_live(request: Request):
         "current_trade": engine.current_trade,
         "stats": engine.session_stats,
         "history": engine.trade_history[-20:]
+    }
+
+@router.get("/api/candles")
+async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe: int = 300, count: int = 80):
+    """
+    Retorna el historial de velas M5 y los marcadores de señales calculados para TradingView Lightweight Charts
+    """
+    engine = request.app.state.engine
+    candles = await asyncio.to_thread(engine.iq.get_candles, pair, timeframe, count)
+    if not candles:
+        return {"pair": pair, "timeframe": timeframe, "candles": [], "markers": [], "fibo": None}
+
+    formatted_candles = []
+    markers = []
+    indicator = engine.indicator
+
+    for i in range(len(candles)):
+        c = candles[i]
+        c_time = int(c.get('from', 0))
+        formatted_candles.append({
+            "time": c_time,
+            "open": float(c['open']),
+            "high": float(c.get('max', c.get('high', c['close']))),
+            "low": float(c.get('min', c.get('low', c['close']))),
+            "close": float(c['close']),
+            "volume": int(c.get('volume', 0))
+        })
+
+        # Marcadores de señales del indicador sobre velas históricas
+        if i >= 35:
+            sub = candles[:i]
+            res = indicator.analyze_candles(sub)
+            sig = res.get('signal')
+            if sig == "CALL":
+                markers.append({
+                    "time": c_time,
+                    "position": "belowBar",
+                    "color": "#00f59b",
+                    "shape": "arrowUp",
+                    "text": "CALL 5M"
+                })
+            elif sig == "PUT":
+                markers.append({
+                    "time": c_time,
+                    "position": "aboveBar",
+                    "color": "#ff4757",
+                    "shape": "arrowDown",
+                    "text": "PUT 5M"
+                })
+
+    # Datos de Fibonacci activos si aplican a este par
+    fibo_data = None
+    if engine.current_trade and engine.current_trade.get("pair") == pair:
+        fibo_data = {
+            "fibo_50": engine.current_trade.get("fibo_50"),
+            "fibo_618": engine.current_trade.get("fibo_618"),
+            "direction": engine.current_trade.get("direction"),
+            "entry_price": engine.current_trade.get("entry_price"),
+            "state": "IN_TRADE"
+        }
+    elif engine.pending_signal and engine.pending_signal.get("pair") == pair:
+        fibo_data = {
+            "fibo_50": engine.pending_signal.get("fibo_50"),
+            "fibo_618": engine.pending_signal.get("fibo_618"),
+            "direction": engine.pending_signal.get("direction"),
+            "entry_price": float(candles[-1]['close']) if candles else 0.0,
+            "state": "CONFIRMING"
+        }
+
+    return {
+        "pair": pair,
+        "timeframe": timeframe,
+        "candles": formatted_candles,
+        "markers": markers,
+        "fibo": fibo_data,
+        "current_tick": engine.current_tick_price if pair == engine.active_pair else (formatted_candles[-1]['close'] if formatted_candles else 0.0)
     }
 
 @router.get("/login", response_class=HTMLResponse)

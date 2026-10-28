@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sala de Señales VIP en Vivo | Trader 4 Less</title>
+  <title>Trader 4 Less | Señales VIP & Gráficos M5 en Vivo</title>
   <link rel="icon" type="image/svg+xml" href="/static/assets/images/favicon.svg">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,6 +11,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="/static/css/style.css">
+  <!-- TradingView Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
   <style>
     .signals-page-body {
       background-color: #06090f;
@@ -20,7 +23,7 @@
     }
 
     .signals-container {
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 24px 16px 60px;
     }
@@ -29,7 +32,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 14px 20px;
+      padding: 14px 22px;
       background: rgba(18, 24, 38, 0.85);
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -61,7 +64,7 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
+      padding: 5px 12px;
       background: rgba(255, 71, 87, 0.15);
       border: 1px solid rgba(255, 71, 87, 0.4);
       border-radius: 50px;
@@ -73,8 +76,8 @@
     }
 
     .live-dot-pulse {
-      width: 7px;
-      height: 7px;
+      width: 8px;
+      height: 8px;
       background: #ff4757;
       border-radius: 50%;
       animation: pulse-red 1.2s infinite;
@@ -84,6 +87,12 @@
       0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); }
       70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(255, 71, 87, 0); }
       100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     .btn-join-telegram {
@@ -98,61 +107,90 @@
       border-radius: 50px;
       text-decoration: none;
       box-shadow: 0 4px 14px rgba(0, 136, 204, 0.35);
-      transition: all 0.2s ease;
+      transition: all 0.2s;
     }
-
     .btn-join-telegram:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 136, 204, 0.5);
+      background: #0099e6;
+      transform: translateY(-1px);
     }
 
-    /* HERO ACTIVE SIGNAL DISPLAY */
+    .btn-admin-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 15px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      font-weight: 600;
+      font-size: 0.82rem;
+      border-radius: 50px;
+      text-decoration: none;
+    }
+    .btn-admin-link:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+
+    /* HERO ACTIVE SIGNAL CARD */
     .active-signal-hero {
-      position: relative;
-      background: linear-gradient(145deg, rgba(18, 24, 38, 0.95) 0%, rgba(10, 15, 26, 0.98) 100%);
-      border: 1px solid rgba(0, 245, 155, 0.25);
-      border-radius: 20px;
-      padding: 28px;
+      background: rgba(18, 24, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 22px 24px;
       margin-bottom: 24px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      position: relative;
       overflow: hidden;
     }
 
     .active-signal-hero::before {
       content: '';
       position: absolute;
-      top: -50%;
-      right: -20%;
-      width: 300px;
-      height: 300px;
-      background: radial-gradient(circle, rgba(0, 245, 155, 0.12), transparent 70%);
-      pointer-events: none;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, #00f59b, #00d2ff, #ffd700);
     }
 
     .hero-top-status {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      padding-bottom: 14px;
+      margin-bottom: 16px;
     }
 
     .status-tag-main {
-      font-size: 0.85rem;
-      font-weight: 700;
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
     }
 
-    .status-searching { color: #8e9bb0; }
-    .status-confirming { color: #ffa502; }
-    .status-in-trade { color: #00f59b; }
+    .status-searching {
+      background: rgba(0, 210, 255, 0.12);
+      color: #00d2ff;
+      border: 1px solid rgba(0, 210, 255, 0.3);
+    }
+
+    .status-confirming {
+      background: rgba(255, 215, 0, 0.15);
+      color: #ffd700;
+      border: 1px solid rgba(255, 215, 0, 0.4);
+      animation: pulse-gold 1.5s infinite;
+    }
+
+    .status-in-trade {
+      background: rgba(0, 245, 155, 0.15);
+      color: #00f59b;
+      border: 1px solid rgba(0, 245, 155, 0.4);
+    }
 
     .signal-details-grid {
       display: grid;
-      grid-template-columns: 1.2fr 1fr 1fr;
+      grid-template-columns: 1.2fr 1.6fr 1fr;
       gap: 20px;
       align-items: center;
     }
@@ -160,40 +198,37 @@
     .signal-pair-box {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
     }
 
     .signal-pair-symbol {
-      font-size: 2.2rem;
+      font-size: 2rem;
       font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
       letter-spacing: 1px;
-      color: #fff;
     }
 
     .signal-direction-badge {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 16px;
-      border-radius: 8px;
+      font-size: 1rem;
       font-weight: 800;
-      font-size: 1.1rem;
-      letter-spacing: 1px;
+      padding: 8px 16px;
+      border-radius: 10px;
       width: fit-content;
     }
 
     .badge-call {
-      background: rgba(0, 245, 155, 0.18);
+      background: rgba(0, 245, 155, 0.15);
       color: #00f59b;
-      border: 1px solid #00f59b;
-      box-shadow: 0 0 16px rgba(0, 245, 155, 0.3);
+      border: 1px solid rgba(0, 245, 155, 0.4);
     }
 
     .badge-put {
-      background: rgba(255, 71, 87, 0.18);
+      background: rgba(255, 71, 87, 0.15);
       color: #ff4757;
-      border: 1px solid #ff4757;
-      box-shadow: 0 0 16px rgba(255, 71, 87, 0.3);
+      border: 1px solid rgba(255, 71, 87, 0.4);
     }
 
     .signal-meta-box {
@@ -201,7 +236,7 @@
       flex-direction: column;
       gap: 8px;
       background: rgba(255, 255, 255, 0.03);
-      padding: 14px;
+      padding: 14px 18px;
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.05);
     }
@@ -211,7 +246,6 @@
       justify-content: space-between;
       font-size: 0.85rem;
     }
-
     .meta-lbl { color: #8e9bb0; }
     .meta-val { font-weight: 700; color: #fff; font-family: 'JetBrains Mono', monospace; }
 
@@ -227,15 +261,16 @@
     }
 
     .cd-title {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 700;
       color: #8e9bb0;
       margin-bottom: 6px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .cd-number {
-      font-size: 2.4rem;
+      font-size: 2.2rem;
       font-weight: 800;
       color: #00d2ff;
       font-family: 'JetBrains Mono', monospace;
@@ -258,32 +293,218 @@
       transition: width 0.2s linear;
     }
 
-    /* WAITING STATE */
     .signal-waiting-view {
       text-align: center;
-      padding: 30px 10px;
+      padding: 24px 10px;
     }
 
     .radar-scan-icon {
-      font-size: 2.8rem;
+      font-size: 2.5rem;
       color: #00d2ff;
-      margin-bottom: 14px;
-      animation: pulse-ring 2s infinite;
+      margin-bottom: 12px;
     }
 
     .waiting-title {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 700;
       color: #fff;
       margin-bottom: 6px;
     }
 
     .waiting-desc {
+      font-size: 0.9rem;
+      color: #8e9bb0;
+      max-width: 580px;
+      margin: 0 auto;
+    }
+
+    /* =========================================================
+       TRADINGVIEW LIGHTWEIGHT CHARTS VIP SECTION
+       ========================================================= */
+    .chart-section-card {
+      background: rgba(18, 24, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+    }
+
+    .chart-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chart-header-left {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .chart-title-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+    }
+
+    .tf-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #00f59b, #00d2ff);
+      color: #06090f;
+      padding: 2px 7px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .chart-pairs-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .pair-pill-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #8e9bb0;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .pair-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+    .pair-pill-btn.active {
+      background: rgba(0, 245, 155, 0.18);
+      border-color: #00f59b;
+      color: #00f59b;
+      box-shadow: 0 0 10px rgba(0, 245, 155, 0.25);
+    }
+
+    .chart-header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Fibonacci HUD */
+    .fibo-hud-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 6px 14px;
+    }
+
+    .fibo-hud-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #8e9bb0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      text-transform: uppercase;
+    }
+
+    .fibo-hud-pills {
+      display: flex;
+      gap: 8px;
+    }
+
+    .fibo-pill-50 {
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: #00d2ff;
+      background: rgba(0, 210, 255, 0.12);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 210, 255, 0.3);
+    }
+
+    .fibo-pill-618 {
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: #ffd700;
+      background: rgba(255, 215, 0, 0.12);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 215, 0, 0.3);
+    }
+
+    .chart-live-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .chart-container-wrap {
+      width: 100%;
+      height: 480px;
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #080c16;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .chart-loader {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       font-size: 0.95rem;
       color: #8e9bb0;
-      max-width: 500px;
-      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 10;
     }
+
+    .chart-footer-legend {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-top: 14px;
+      margin-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.78rem;
+      color: #8e9bb0;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-marker.marker-call { color: #00f59b; font-weight: 900; font-size: 0.9rem; }
+    .legend-marker.marker-put { color: #ff4757; font-weight: 900; font-size: 0.9rem; }
+    .legend-line { display: inline-block; width: 18px; height: 3px; border-radius: 2px; }
+    .legend-line.line-50 { background: #00d2ff; }
+    .legend-line.line-618 { background: #ffd700; }
 
     /* METRICS BAR */
     .signals-stats-row {
@@ -306,7 +527,7 @@
     .s-stat-icon {
       width: 44px;
       height: 44px;
-      border-radius: 10px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -316,25 +537,19 @@
     .s-winrate-icon { background: rgba(0, 245, 155, 0.15); color: #00f59b; }
     .s-itm-icon { background: rgba(0, 210, 255, 0.15); color: #00d2ff; }
     .s-otm-icon { background: rgba(255, 71, 87, 0.15); color: #ff4757; }
-    .s-total-icon { background: rgba(255, 165, 2, 0.15); color: #ffa502; }
-
-    .s-stat-content {
-      display: flex;
-      flex-direction: column;
-    }
+    .s-total-icon { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
 
     .s-stat-lbl {
-      font-size: 0.72rem;
-      font-weight: 700;
+      display: block;
+      font-size: 0.75rem;
       color: #8e9bb0;
-      text-transform: uppercase;
+      margin-bottom: 3px;
     }
-
     .s-stat-val {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 800;
-      color: #fff;
       font-family: 'JetBrains Mono', monospace;
+      color: #fff;
     }
 
     /* HISTORY TABLE */
@@ -392,10 +607,13 @@
     @media (max-width: 800px) {
       .signal-details-grid { grid-template-columns: 1fr; }
       .signals-stats-row { grid-template-columns: 1fr 1fr; }
+      .chart-header-bar { flex-direction: column; align-items: flex-start; }
+      .chart-header-right { width: 100%; justify-content: space-between; }
     }
     @media (max-width: 500px) {
       .signals-stats-row { grid-template-columns: 1fr; }
       .signals-navbar { flex-direction: column; gap: 12px; }
+      .nav-actions { width: 100%; justify-content: space-between; }
     }
   </style>
 </head>
@@ -412,13 +630,19 @@
 
       <div class="live-badge-glow">
         <span class="live-dot-pulse"></span>
-        <span>SEÑALES EN VIVO</span>
+        <span>SEÑALES M5 EN VIVO</span>
       </div>
 
-      <a href="https://t.me/traderfxapp" target="_blank" class="btn-join-telegram">
-        <i class="fa-brands fa-telegram"></i>
-        <span>Canal VIP Telegram</span>
-      </a>
+      <div class="nav-actions">
+        <a href="https://t.me/traderfxapp" target="_blank" class="btn-join-telegram">
+          <i class="fa-brands fa-telegram"></i>
+          <span>Canal VIP Telegram</span>
+        </a>
+        <a href="/login" class="btn-admin-link">
+          <i class="fa-solid fa-lock"></i>
+          <span>Admin</span>
+        </a>
+      </div>
     </header>
 
     <!-- HERO ACTIVE SIGNAL CARD -->
@@ -436,14 +660,14 @@
         <i class="fa-solid fa-satellite-dish radar-scan-icon"></i>
         <h2 class="waiting-title">Algoritmo Cuantitativo VIP Activo (Velas 5M)</h2>
         <p class="waiting-desc" id="waiting-desc-text">
-          Analizando 4 pares principales en simultáneo (Mercado Real & OTC) en temporalidad M5. Las operaciones son a 5 minutos fijos sin martingala.
+          Analizando 4 pares principales en simultáneo (Real & OTC) con <b>Filtro de Confluencia Alta M15</b>. Expiración fija a 5 minutos al término de la vela.
         </p>
       </div>
 
       <!-- VIEW: ACTIVE SIGNAL / IN_TRADE -->
       <div id="view-active-signal" class="signal-details-grid" style="display: none;">
         <div class="signal-pair-box">
-          <span class="signal-pair-symbol" id="sig-pair">EURUSD</span>
+          <span class="signal-pair-symbol" id="sig-pair">EURUSD-OTC</span>
           <div class="signal-direction-badge badge-call" id="sig-direction-badge">
             <i class="fa-solid fa-arrow-trend-up" id="sig-dir-icon"></i>
             <span id="sig-direction-text">COMPRA (CALL)</span>
@@ -476,6 +700,66 @@
             <div class="cd-bar-fill" id="sig-progress" style="width: 100%;"></div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- TRADINGVIEW LIGHTWEIGHT CHARTS VIP SECTION -->
+    <section class="chart-section-card">
+      <div class="chart-header-bar">
+        <div class="chart-header-left">
+          <div class="chart-title-tag">
+            <i class="fa-solid fa-chart-candlestick"></i>
+            <span id="chart-active-pair-label">EURUSD-OTC</span>
+            <span class="tf-badge">M5</span>
+          </div>
+
+          <!-- Pair switcher buttons -->
+          <div class="chart-pairs-nav" id="chart-pairs-nav">
+            <button class="pair-pill-btn active" data-pair="EURUSD-OTC" onclick="switchChartPair('EURUSD-OTC')">EURUSD-OTC</button>
+            <button class="pair-pill-btn" data-pair="GBPUSD-OTC" onclick="switchChartPair('GBPUSD-OTC')">GBPUSD-OTC</button>
+            <button class="pair-pill-btn" data-pair="USDJPY-OTC" onclick="switchChartPair('USDJPY-OTC')">USDJPY-OTC</button>
+            <button class="pair-pill-btn" data-pair="EURJPY-OTC" onclick="switchChartPair('EURJPY-OTC')">EURJPY-OTC</button>
+            <button class="pair-pill-btn" data-pair="EURUSD" onclick="switchChartPair('EURUSD')">EURUSD</button>
+            <button class="pair-pill-btn" data-pair="GBPUSD" onclick="switchChartPair('GBPUSD')">GBPUSD</button>
+            <button class="pair-pill-btn" data-pair="USDJPY" onclick="switchChartPair('USDJPY')">USDJPY</button>
+            <button class="pair-pill-btn" data-pair="EURJPY" onclick="switchChartPair('EURJPY')">EURJPY</button>
+          </div>
+        </div>
+
+        <div class="chart-header-right">
+          <!-- Fibonacci HUD -->
+          <div class="fibo-hud-card" id="fibo-hud-card" style="display: none;">
+            <div class="fibo-hud-title">
+              <i class="fa-solid fa-crosshairs"></i> RETROCESO FIBO
+            </div>
+            <div class="fibo-hud-pills">
+              <span class="fibo-pill-50" id="hud-fibo-50">50.0%: --</span>
+              <span class="fibo-pill-618" id="hud-fibo-618">61.8%: --</span>
+            </div>
+          </div>
+
+          <div class="chart-live-indicator">
+            <span class="live-dot-pulse"></span>
+            <span id="chart-live-price">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart Container -->
+      <div class="chart-container-wrap" id="chart-wrapper">
+        <div id="tv-chart-container" style="width: 100%; height: 100%;"></div>
+        <div id="chart-loading-spinner" class="chart-loader">
+          <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando velas M5...
+        </div>
+      </div>
+
+      <!-- Chart Legend / Instructions Footer -->
+      <div class="chart-footer-legend">
+        <div class="legend-item"><span class="legend-marker marker-call">▲</span> Señal Compra (CALL M5)</div>
+        <div class="legend-item"><span class="legend-marker marker-put">▼</span> Señal Venta (PUT M5)</div>
+        <div class="legend-item"><span class="legend-line line-50"></span> Fibo 50.0% (Zona Entrada)</div>
+        <div class="legend-item"><span class="legend-line line-618"></span> Fibo 61.8% (Zona Sniper)</div>
+        <div class="legend-item"><i class="fa-solid fa-shield-halved" style="color: #00d2ff;"></i> Filtro Confluencia Alta M15 Activo</div>
       </div>
     </section>
 
@@ -550,6 +834,14 @@
   </div>
 
   <script>
+    // Variables Globales del Gráfico TradingView Lightweight Charts
+    let tvChart = null;
+    let candleSeries = null;
+    let currentChartPair = 'EURUSD-OTC';
+    let currentCandles = [];
+    let fiboLine50 = null;
+    let fiboLine618 = null;
+
     document.addEventListener('DOMContentLoaded', () => {
       const serverClockEl = document.getElementById('server-clock-text');
       const statusTagEl = document.getElementById('status-tag');
@@ -583,6 +875,165 @@
         serverClockEl.textContent = now.toTimeString().split(' ')[0];
       }, 1000);
 
+      // 1. Inicializar TradingView Lightweight Charts
+      initTvChart();
+
+      // 2. Conectar WebSocket
+      connectSignalsWS();
+
+      function initTvChart() {
+        const container = document.getElementById('tv-chart-container');
+        if (!container || typeof LightweightCharts === 'undefined') return;
+
+        tvChart = LightweightCharts.createChart(container, {
+          width: container.clientWidth,
+          height: 480,
+          layout: {
+            background: { type: 'solid', color: '#070a12' },
+            textColor: '#94a3b8',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11
+          },
+          grid: {
+            vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
+            horzLines: { color: 'rgba(255, 255, 255, 0.04)' }
+          },
+          crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+            vertLine: { color: 'rgba(0, 210, 255, 0.4)', width: 1, style: 2 },
+            horzLine: { color: 'rgba(0, 210, 255, 0.4)', width: 1, style: 2 }
+          },
+          rightPriceScale: {
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            scaleMargins: { top: 0.12, bottom: 0.12 }
+          },
+          timeScale: {
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            timeVisible: true,
+            secondsVisible: false,
+            rightOffset: 6
+          }
+        });
+
+        candleSeries = tvChart.addCandlestickSeries({
+          upColor: '#00f59b',
+          downColor: '#ff4757',
+          borderUpColor: '#00f59b',
+          borderDownColor: '#ff4757',
+          wickUpColor: '#00f59b',
+          wickDownColor: '#ff4757'
+        });
+
+        // Resize automático
+        window.addEventListener('resize', () => {
+          if (tvChart && container) {
+            tvChart.applyOptions({ width: container.clientWidth });
+          }
+        });
+
+        // Cargar velas iniciales
+        loadCandlesForPair(currentChartPair);
+      }
+
+      window.switchChartPair = function(pair) {
+        currentChartPair = pair;
+        document.getElementById('chart-active-pair-label').textContent = pair;
+
+        // Actualizar botones
+        document.querySelectorAll('.pair-pill-btn').forEach(btn => {
+          if (btn.getAttribute('data-pair') === pair) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        });
+
+        loadCandlesForPair(pair);
+      };
+
+      async function loadCandlesForPair(pair) {
+        const spinner = document.getElementById('chart-loading-spinner');
+        if (spinner) spinner.style.display = 'flex';
+
+        try {
+          const resp = await fetch(`/api/candles?pair=${encodeURIComponent(pair)}&timeframe=300&count=90`);
+          const data = await resp.json();
+
+          if (data && data.candles && data.candles.length > 0) {
+            currentCandles = data.candles;
+            candleSeries.setData(currentCandles);
+
+            // Marcadores de señales
+            if (data.markers && data.markers.length > 0) {
+              candleSeries.setMarkers(data.markers);
+            } else {
+              candleSeries.setMarkers([]);
+            }
+
+            // Último precio tick
+            const lastCandle = currentCandles[currentCandles.length - 1];
+            const dec = pair.includes('JPY') ? 3 : 5;
+            document.getElementById('chart-live-price').textContent = (data.current_tick || lastCandle.close).toFixed(dec);
+
+            // Ajustar vista
+            tvChart.timeScale().fitContent();
+
+            // Actualizar líneas Fibonacci si existen
+            updateFiboLines(data.fibo);
+          }
+        } catch (e) {
+          console.error("Error cargando velas:", e);
+        } finally {
+          if (spinner) spinner.style.display = 'none';
+        }
+      }
+
+      function updateFiboLines(fibo) {
+        const hud = document.getElementById('fibo-hud-card');
+        const hud50 = document.getElementById('hud-fibo-50');
+        const hud618 = document.getElementById('hud-fibo-618');
+
+        // Limpiar líneas anteriores
+        if (fiboLine50 && candleSeries) {
+          candleSeries.removePriceLine(fiboLine50);
+          fiboLine50 = null;
+        }
+        if (fiboLine618 && candleSeries) {
+          candleSeries.removePriceLine(fiboLine618);
+          fiboLine618 = null;
+        }
+
+        if (fibo && fibo.fibo_50 && fibo.fibo_618) {
+          const dec = currentChartPair.includes('JPY') ? 3 : 5;
+          const p50 = parseFloat(fibo.fibo_50);
+          const p618 = parseFloat(fibo.fibo_618);
+
+          fiboLine50 = candleSeries.createPriceLine({
+            price: p50,
+            color: '#00d2ff',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `Fibo 50.0% (${p50.toFixed(dec)})`
+          });
+
+          fiboLine618 = candleSeries.createPriceLine({
+            price: p618,
+            color: '#ffd700',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Solid,
+            axisLabelVisible: true,
+            title: `Fibo 61.8% (${p618.toFixed(dec)})`
+          });
+
+          if (hud) hud.style.display = 'flex';
+          if (hud50) hud50.textContent = `50.0%: ${p50.toFixed(dec)}`;
+          if (hud618) hud618.textContent = `61.8%: ${p618.toFixed(dec)}`;
+        } else {
+          if (hud) hud.style.display = 'none';
+        }
+      }
+
       // WebSocket Connection
       function connectSignalsWS() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -603,15 +1054,26 @@
       }
 
       function handleData(data) {
-        // Actualización de ticks rápidos
+        // Ticks rápidos en vivo
         if (data.type === 'tick') {
           if (data.tick_price) {
             const dec = (data.pair && data.pair.includes('JPY')) ? 3 : 5;
             sigTickPrice.textContent = parseFloat(data.tick_price).toFixed(dec);
+
+            // Si el par que está tickeando es el par visible en el gráfico, actualizar última vela
+            if (data.pair === currentChartPair && currentCandles.length > 0 && candleSeries) {
+              document.getElementById('chart-live-price').textContent = parseFloat(data.tick_price).toFixed(dec);
+              const last = currentCandles[currentCandles.length - 1];
+              const p = parseFloat(data.tick_price);
+              last.close = p;
+              if (p > last.high) last.high = p;
+              if (p < last.low) last.low = p;
+              candleSeries.update(last);
+            }
           }
           if (data.seconds_left !== undefined) {
             sigCountdown.textContent = `${data.seconds_left}s`;
-            const pct = Math.max(0, Math.min(100, (data.seconds_left / 60) * 100));
+            const pct = Math.max(0, Math.min(100, (data.seconds_left / 300) * 100));
             sigProgress.style.width = `${pct}%`;
           }
           return;
@@ -626,15 +1088,21 @@
           viewActiveSignal.style.display = 'none';
           statusTitleTextEl.textContent = 'SISTEMA EN ESPERA';
           statusTagEl.className = 'status-tag-main status-searching';
-          waitingDescText.textContent = 'El bot se encuentra en espera de activación por el administrador.';
+          waitingDescText.textContent = 'El bot se encuentra en espera de activación por el administrador en el panel.';
           return;
+        }
+
+        // Si hay señal pendiente o trade activo, cambiar automáticamente el gráfico al par activo si el usuario no lo forzó
+        const activeSignalPair = (data.pending_signal && data.pending_signal.pair) || (data.current_trade && data.current_trade.pair);
+        if (activeSignalPair && activeSignalPair !== currentChartPair) {
+          switchChartPair(activeSignalPair);
         }
 
         if (mode === 'CONFIRMING' && data.pending_signal) {
           viewWaiting.style.display = 'none';
           viewActiveSignal.style.display = 'grid';
 
-          statusTitleTextEl.textContent = `¡SEÑAL DETECTADA EN ${data.pending_signal.pair}! CONFIRMANDO...`;
+          statusTitleTextEl.textContent = `¡SEÑAL ${data.pending_signal.direction} EN ${data.pending_signal.pair}! CONFIRMANDO...`;
           statusTagEl.className = 'status-tag-main status-confirming';
           cdTitle.textContent = 'CIERRE DE VELA EN';
 
@@ -650,15 +1118,24 @@
             sigDirIcon.className = 'fa-solid fa-arrow-trend-down';
           }
 
-          sigEntryTime.textContent = 'Próxima vela (Seg 00)';
+          sigEntryTime.textContent = 'Apertura M5 (Seg 00)';
           sigCycleState.textContent = 'Confirmando Vela';
+
+          // Actualizar líneas Fibonacci en el gráfico
+          if (data.pending_signal.fibo_50 && data.pending_signal.fibo_618) {
+            updateFiboLines({
+              fibo_50: data.pending_signal.fibo_50,
+              fibo_618: data.pending_signal.fibo_618
+            });
+          }
+
         } else if (mode === 'IN_TRADE' && data.current_trade) {
           viewWaiting.style.display = 'none';
           viewActiveSignal.style.display = 'grid';
 
-          statusTitleTextEl.textContent = `OPERACIÓN ACTIVA EN ${data.current_trade.pair}`;
+          statusTitleTextEl.textContent = `OPERACIÓN ACTIVA (5M) EN ${data.current_trade.pair}`;
           statusTagEl.className = 'status-tag-main status-in-trade';
-          cdTitle.textContent = 'EXPIRACIÓN 1M EN';
+          cdTitle.textContent = 'EXPIRACIÓN 5M EN';
 
           sigPair.textContent = data.current_trade.pair;
           const dir = data.current_trade.direction;
@@ -673,13 +1150,22 @@
           }
 
           sigEntryTime.textContent = data.current_trade.entry_time;
-          sigCycleState.textContent = 'Operación 1M Abierta';
+          sigCycleState.textContent = 'Operación 5M en Curso';
+
+          // Actualizar líneas Fibonacci
+          if (data.current_trade.fibo_50 && data.current_trade.fibo_618) {
+            updateFiboLines({
+              fibo_50: data.current_trade.fibo_50,
+              fibo_618: data.current_trade.fibo_618
+            });
+          }
+
         } else {
           viewWaiting.style.display = 'block';
           viewActiveSignal.style.display = 'none';
           statusTitleTextEl.textContent = 'ESCANEANDO MERCADO EN SIMULTÁNEO';
           statusTagEl.className = 'status-tag-main status-searching';
-          waitingDescText.textContent = `Escaneando ${data.selected_pairs ? data.selected_pairs.length : 20} pares. La próxima señal aparecerá aquí automáticamente.`;
+          waitingDescText.textContent = `Analizando 4 pares principales con Filtro Confluencia Alta M15. Próxima señal aparecerá aquí automáticamente.`;
         }
 
         // Estadísticas
@@ -698,7 +1184,7 @@
             const isWin = t.result === 'WIN';
             const isLoss = t.result === 'LOSS';
             const resClass = isWin ? 'pill-itm' : (isLoss ? 'pill-otm' : '');
-            const resText = isWin ? 'ITM ✅' : (isLoss ? 'OTM ❌' : 'EMPATE');
+            const resText = isWin ? 'ITM ✅' : (isLoss ? 'OTM ❌' : 'EMPATE ⚖️');
             const dirClass = t.direction === 'CALL' ? 'pill-call' : 'pill-put';
 
             html += `
@@ -706,9 +1192,9 @@
                 <td>${t.entry_time}</td>
                 <td><strong>${t.pair}</strong></td>
                 <td><span class="${dirClass}">${t.direction}</span></td>
-                <td>${t.entry_price.toFixed(5)}</td>
-                <td>${t.close_price.toFixed(5)}</td>
-                <td>1M</td>
+                <td>${(t.entry_price || 0).toFixed(5)}</td>
+                <td>${(t.close_price || 0).toFixed(5)}</td>
+                <td>5 Minutos</td>
                 <td class="${resClass}">${resText}</td>
               </tr>
             `;
@@ -716,8 +1202,6 @@
           signalsTbody.innerHTML = html;
         }
       }
-
-      connectSignalsWS();
     });
   </script>
 </body>

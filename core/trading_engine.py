@@ -350,7 +350,31 @@ class TradingEngine:
 
                     if analysis.get('signal'):
                         direction = analysis['signal']
+
+                        # FILTRO DE CONFLUENCIA ALTA M15 (Descartar rangos cortos/laterales de M15)
+                        is_confluent, conf_reason = await asyncio.to_thread(
+                            self.check_m15_high_confluence, pair, direction, float(closed_candle['close'])
+                        )
+                        if not is_confluent:
+                            logger.info(f"Filtro M15: Señal {direction} en {pair} descartada -> {conf_reason}")
+                            continue
+
                         candle_dt_str = datetime.fromtimestamp(closed_candle_time).strftime("%H:%M:%S")
+
+                        # Cálculo preliminar de Fibonacci uniendo la vela previa y la de señal
+                        s_min = float(closed_candle.get('min', closed_candle.get('low', closed_candle['close'])))
+                        s_max = float(closed_candle.get('max', closed_candle.get('high', closed_candle['close'])))
+                        p_min = float(candles[-3].get('min', candles[-3].get('low', candles[-3]['close']))) if len(candles) >= 3 else s_min
+                        p_max = float(candles[-3].get('max', candles[-3].get('high', candles[-3]['close']))) if len(candles) >= 3 else s_max
+                        init_min = min(s_min, p_min)
+                        init_max = max(s_max, p_max)
+                        init_range = max(1e-5, init_max - init_min)
+                        if direction == "CALL":
+                            init_fibo_50 = init_max - (init_range * 0.50)
+                            init_fibo_618 = init_max - (init_range * 0.618)
+                        else:
+                            init_fibo_50 = init_min + (init_range * 0.50)
+                            init_fibo_618 = init_min + (init_range * 0.618)
 
                         # ¡BLOQUEAR MOTOR EN ESTE PAR! (Una señal a la vez)
                         self.locked_pair = pair
@@ -364,7 +388,10 @@ class TradingEngine:
                             "candle_time": candle_dt_str,
                             "signal_candle_from": closed_candle_time,
                             "confirm_candle_from": candles[-1].get('from', 0),
-                            "signal_candle": closed_candle
+                            "signal_candle": closed_candle,
+                            "fibo_50": round(init_fibo_50, 5),
+                            "fibo_618": round(init_fibo_618, 5),
+                            "confluence_info": conf_reason
                         }
 
                         tf_label = "5M"
@@ -443,6 +470,8 @@ class TradingEngine:
                                 "direction": direction,
                                 "entry_time": entry_time_str,
                                 "entry_price": c_close,
+                                "fibo_50": round(fibo_50, 5),
+                                "fibo_618": round(fibo_618, 5),
                                 "amount": trade_amount,
                                 "expiration": self.expiration,
                                 "start_ts": server_ts,
@@ -613,3 +642,65 @@ class TradingEngine:
         if account_type.upper() != self.iq.account_type:
             self.iq.change_balance(account_type.upper())
         logger.info(f"Configuración actualizada: Pares={len(self.selected_pairs)}, TF=300s (5M), Monto=${self.base_amount}, Sin Martingala, Cuenta={self.iq.account_type}")
+
+    def check_m15_high_confluence(self, pair: str, direction: str, current_price: float) -> Tuple[bool, str]:
+        """
+        Filtro de Confluencia Alta M15:
+        1. Descarta señales generadas dentro de rangos cortos/estrechos (squeeze lateral) en M15.
+        2. Exige confluencia de soporte/rebote para CALL y resistencia/rechazo para PUT,
+           evitando comprar techos o vender pisos en rangos.
+        """
+        try:
+            m15_candles = self.iq.get_candles(pair, 900, 20)
+            if not m15_candles or len(m15_candles) < 10:
+                return True, "Datos M15 limitados, confluencia estándar"
+
+            closes = [float(c['close']) for c in m15_candles]
+            highs = [float(c.get('max', c.get('high', c['close']))) for c in m15_candles]
+            lows = [float(c.get('min', c.get('low', c['close']))) for c in m15_candles]
+
+            # 1. Medir el rango de las últimas 4 velas M15 (última hora)
+            recent_high = max(highs[-4:])
+            recent_low = min(lows[-4:])
+            recent_range = recent_high - recent_low
+
+            # 2. Medir ATR promedio en M15 (14 periodos)
+            tr_list = []
+            for i in range(1, len(m15_candles)):
+                tr = max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+                tr_list.append(tr)
+            atr_m15 = sum(tr_list) / len(tr_list) if tr_list else 0.0005
+
+            # Filtro 1: Rango corto lateral en M15 (rango de 1 hora menor al 110% de un solo ATR promedio)
+            if recent_range < (1.1 * atr_m15):
+                return False, f"Rango lateral estrecho en M15 (Rango 1h: {recent_range:.5f} < ATR: {atr_m15:.5f})"
+
+            # 3. Ubicación relativa del precio dentro del rango M15 (0.0 = soporte inferior, 1.0 = resistencia superior)
+            full_high = max(highs[-8:])
+            full_low = min(lows[-8:])
+            range_15 = full_high - full_low
+            if range_15 > 1e-6:
+                relative_pos = (current_price - full_low) / range_15
+            else:
+                relative_pos = 0.5
+
+            # 4. Tendencia M15 (Media rápida 6 vs Media lenta 14)
+            ma_fast = sum(closes[-6:]) / 6
+            ma_slow = sum(closes[-14:]) / 14 if len(closes) >= 14 else ma_fast
+
+            if direction == "CALL":
+                # Rechazar si estamos comprando en el techo de un rango sin tendencia alcista
+                if relative_pos > 0.85 and ma_fast <= ma_slow:
+                    return False, f"Sin confluencia para CALL (Precio en techo de rango M15: {relative_pos:.2f})"
+                return True, f"Confluencia Alta CALL (Zona: {relative_pos:.2f}, Rango M15 activo)"
+
+            elif direction == "PUT":
+                # Rechazar si estamos vendiendo en el piso de un rango sin tendencia bajista
+                if relative_pos < 0.15 and ma_fast >= ma_slow:
+                    return False, f"Sin confluencia para PUT (Precio en piso de rango M15: {relative_pos:.2f})"
+                return True, f"Confluencia Alta PUT (Zona: {relative_pos:.2f}, Rango M15 activo)"
+
+            return True, "Confluencia válida"
+        except Exception as e:
+            logger.error(f"Error evaluando confluencia M15: {e}")
+            return True, "Fallback confluencia"

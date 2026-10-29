@@ -813,8 +813,8 @@ class TradingEngine:
                         self.live_signals_feed.append(sig_event)
                         self.live_signals_feed = self.live_signals_feed[-10:]
 
-                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando retroceso a Fibo 50% ({init_fibo_50:.5f})..."
-                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA M5! {pair} {direction}. Esperando retroceso Fibo 50%: {init_fibo_50:.5f}")
+                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando retroceso Fibo 50% ({init_fibo_50:.5f}) (Demás pares en pausa)..."
+                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA M5! {pair} {direction}. Esperando retroceso Fibo 50%: {init_fibo_50:.5f} (Demás pares bloqueados)")
                         
                         # Notificación inmediata a Telegram (Alternativa A)
                         self.telegram.notify_signal_m5_pullback(
@@ -847,7 +847,7 @@ class TradingEngine:
             time_left_to_wait = max(0, max_wait - elapsed)
             self.current_status_message = (
                 f"[{time_str}] ESPERANDO RETROCESO {direction} EN {pair}: "
-                f"Precio: {current_price:.5f} | Fibo 50%: {fibo_50:.5f} (Ventana: {time_left_to_wait}s)"
+                f"Precio: {current_price:.5f} | Fibo: {fibo_50:.5f} ({time_left_to_wait}s | Demás pares en pausa)"
             )
 
             # Monitorear tick
@@ -883,8 +883,8 @@ class TradingEngine:
             trade_dir = cur_trade["direction"]
 
             self.current_status_message = (
-                f"[{time_str}] OPERACIÓN EN CURSO: {pair} {trade_dir} ${cur_trade['amount']} - "
-                f"Cierre en: {max(0, remaining)}s"
+                f"[{time_str}] OPERACIÓN EN CURSO (1 A LA VEZ): {pair} {trade_dir} ${cur_trade['amount']} - "
+                f"Cierre en: {max(0, remaining)}s (Demás pares en pausa)"
             )
 
             if remaining <= 0:

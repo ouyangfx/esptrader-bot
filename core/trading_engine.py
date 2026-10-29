@@ -948,7 +948,7 @@ class TradingEngine:
                     "entry_price": p1,
                     "close_price": close_price,
                     "amount": amt1,
-                    "martingale_step": 0
+                    "martingale_step": 1
                 }
                 self.db.save_trade(t1_record)
                 self.trade_history.append(t1_record)
@@ -999,7 +999,7 @@ class TradingEngine:
                         "entry_price": p2,
                         "close_price": close_price,
                         "amount": amt2,
-                        "martingale_step": 0
+                        "martingale_step": 2
                     }
                     self.db.save_trade(t2_record)
                     self.trade_history.append(t2_record)

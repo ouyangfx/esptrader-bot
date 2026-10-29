@@ -933,6 +933,336 @@
     }
 
     /* ==============================================================
+       HISTORIAL DE SEÑALES COMPACTO Y RESPONSIVE (MÓVIL / DESKTOP)
+       ============================================================== */
+    .compact-history-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dark);
+      border-radius: var(--radius-lg);
+      padding: 18px 22px;
+      margin-bottom: 22px;
+      box-shadow: var(--shadow-glow);
+    }
+
+    .hist-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-dark);
+      padding-bottom: 12px;
+    }
+
+    .hist-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hist-title-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(0, 210, 255, 0.12);
+      color: var(--iq-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+    }
+
+    .hist-title-text {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .hist-meta-tags {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hist-badge-pill {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 50px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      border: 1px solid var(--border-dark);
+    }
+
+    /* VISTA DE ESCRITORIO (TABLA COMPACTA) */
+    .hist-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      margin-bottom: 12px;
+    }
+
+    .compact-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      text-align: left;
+    }
+
+    .compact-table th {
+      padding: 8px 12px;
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-dark);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .compact-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #e2e8f0;
+      vertical-align: middle;
+    }
+
+    .compact-table tr:hover td {
+      background: rgba(0, 210, 255, 0.03);
+    }
+
+    /* BADGES */
+    .pill-call {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(0, 230, 118, 0.12);
+      color: var(--iq-green);
+      font-weight: 800;
+      font-size: 0.72rem;
+    }
+
+    .pill-put {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 61, 96, 0.12);
+      color: var(--iq-red);
+      font-weight: 800;
+      font-size: 0.72rem;
+    }
+
+    .pill-itm {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 50px;
+      background: rgba(0, 230, 118, 0.18);
+      color: var(--iq-green);
+      font-weight: 800;
+      font-size: 0.74rem;
+      border: 1px solid rgba(0, 230, 118, 0.35);
+    }
+
+    .pill-otm {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 50px;
+      background: rgba(255, 61, 96, 0.18);
+      color: var(--iq-red);
+      font-weight: 800;
+      font-size: 0.74rem;
+      border: 1px solid rgba(255, 61, 96, 0.35);
+    }
+
+    .pill-doji {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 9px;
+      border-radius: 50px;
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      font-weight: 700;
+      font-size: 0.74rem;
+    }
+
+    .pill-step-e1 {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(0, 210, 255, 0.1);
+      color: var(--iq-cyan);
+      border: 1px solid rgba(0, 210, 255, 0.25);
+    }
+
+    .pill-step-e2 {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 215, 0, 0.1);
+      color: var(--iq-gold);
+      border: 1px solid rgba(255, 215, 0, 0.25);
+    }
+
+    .text-green { color: var(--iq-green); font-weight: 800; }
+    .text-red { color: var(--iq-red); font-weight: 800; }
+    .text-muted { color: #64748b; }
+
+    /* VISTA MÓVIL (TARJETAS COMPACTAS) */
+    .compact-hist-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .m-hist-item {
+      background: var(--bg-box);
+      border: 1px solid var(--border-dark);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+
+    .m-hist-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .m-hist-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .m-hist-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .m-hist-pair {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 800;
+      font-size: 0.86rem;
+      color: #ffffff;
+    }
+
+    .m-hist-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+
+    .m-hist-prices {
+      font-family: 'JetBrains Mono', monospace;
+      color: #cbd5e1;
+    }
+
+    /* PAGINADOR */
+    .hist-pagination-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-dark);
+    }
+
+    .hist-page-info {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    .hist-page-btns {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .hist-btn {
+      background: #101a2f;
+      border: 1px solid var(--border-dark);
+      color: #94a3b8;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .hist-btn:hover:not(:disabled) {
+      background: #182846;
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .hist-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .hist-num-btn {
+      min-width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      background: #101a2f;
+      border: 1px solid var(--border-dark);
+      color: #94a3b8;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0 5px;
+    }
+
+    .hist-num-btn:hover {
+      background: #182846;
+      color: #ffffff;
+    }
+
+    .hist-num-btn.active {
+      background: var(--iq-cyan);
+      color: #06090f;
+      border-color: var(--iq-cyan);
+      font-weight: 900;
+      box-shadow: 0 0 10px rgba(0, 210, 255, 0.35);
+    }
+
+    .hist-num-ellipsis {
+      color: #64748b;
+      font-size: 0.75rem;
+      padding: 0 2px;
+    }
+
+    @media (max-width: 768px) {
+      .hist-table-wrap { display: none; }
+      .compact-hist-mobile { display: flex; }
+      .hist-pagination-bar { justify-content: center; flex-direction: column; gap: 8px; }
+    }
+
+    /* ==============================================================
        CONSEJOS DE INVERSIÓN (BAJADOS AL FINAL ENCIMA DEL FOOTER)
        ============================================================== */
     .investment-tips-banner {
@@ -1421,6 +1751,72 @@
       </div>
     </section>
 
+    <!-- HISTORIAL DE SEÑALES COMPACTO Y RESPONSIVE CON PAGINADOR (10 POR PÁGINA) -->
+    <section class="compact-history-card" id="history-section-card">
+      <div class="hist-header-bar">
+        <div class="hist-title-wrap">
+          <div class="hist-title-icon">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <div>
+            <h3 class="hist-title-text">Historial de Señales M5</h3>
+          </div>
+        </div>
+        <div class="hist-meta-tags">
+          <span class="hist-badge-pill" id="hist-total-badge">0 operaciones</span>
+          <span class="hist-badge-pill"><i class="fa-solid fa-layer-group"></i> 10 por pág</span>
+        </div>
+      </div>
+
+      <!-- VISTA DE ESCRITORIO (TABLA COMPACTA) -->
+      <div class="hist-table-wrap">
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Par</th>
+              <th>Dirección</th>
+              <th>Entrada</th>
+              <th>Precio Entrada</th>
+              <th>Precio Cierre</th>
+              <th>Resultado</th>
+              <th>Beneficio</th>
+            </tr>
+          </thead>
+          <tbody id="hist-table-body">
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> Cargando historial...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- VISTA MÓVIL (TARJETAS COMPACTAS) -->
+      <div class="compact-hist-mobile" id="hist-mobile-container">
+        <!-- Renderizado dinámico vía JavaScript -->
+      </div>
+
+      <!-- PAGINADOR (1, 2, 3...) -->
+      <div class="hist-pagination-bar">
+        <div class="hist-page-info" id="hist-page-info">
+          Página 1 de 1 (0 operaciones)
+        </div>
+        <div class="hist-page-btns">
+          <button class="hist-btn" id="btn-prev-page" onclick="goToHistPage(currentHistPage - 1)">
+            <i class="fa-solid fa-chevron-left"></i> Anterior
+          </button>
+          <div id="hist-page-numbers" style="display: flex; gap: 4px; align-items: center;">
+            <button class="hist-num-btn active">1</button>
+          </div>
+          <button class="hist-btn" id="btn-next-page" onclick="goToHistPage(currentHistPage + 1)">
+            Siguiente <i class="fa-solid fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- CONSEJOS DE INVERSIÓN (BAJADOS AL FINAL ENCIMA DEL FOOTER) -->
     <section class="investment-tips-banner">
       <div class="tips-header">
@@ -1468,16 +1864,6 @@
           <p>Opera con monto constante por operación. Evita multiplicar lotes tras pérdidas para proteger tu balance frente a rachas negativas.</p>
         </div>
       </div>
-    </section>
-
-    <!-- TABLA DE HISTORIAL (OCULTA DE LA PÁGINA PRINCIPAL COMO SE SOLICITÓ) -->
-    <section class="history-section" style="display: none !important;">
-      <span id="history-count">0 señales</span>
-      <table class="table-signals">
-        <tbody id="signals-tbody">
-          <tr><td colspan="8">Cargando...</td></tr>
-        </tbody>
-      </table>
     </section>
   </div>
 
@@ -2127,6 +2513,184 @@
           const lastTen = feed.slice(-10);
           if (historyCount) historyCount.textContent = `${lastTen.length} señales`;
         }
+
+        // Si se emitió un resultado nuevo y estamos en la pág 1, refrescar historial
+        if (activeEvent && (activeEvent.type === 'RESULTADO_DUAL' || activeEvent.type === 'RESULTADO')) {
+          if (currentHistPage === 1) {
+            loadHistoryPage(1);
+          }
+        }
+      }
+
+      // ==============================================================
+      // GESTIÓN DEL HISTORIAL DE SEÑALES Y PAGINADOR (10 POR PÁGINA)
+      // ==============================================================
+      let currentHistPage = 1;
+      let totalHistPages = 1;
+
+      window.goToHistPage = function(page) {
+        if (page < 1 || (totalHistPages > 0 && page > totalHistPages)) return;
+        currentHistPage = page;
+        loadHistoryPage(page);
+      };
+
+      async function loadHistoryPage(page = 1) {
+        const tableBody = document.getElementById('hist-table-body');
+        const mobileContainer = document.getElementById('hist-mobile-container');
+        const totalBadge = document.getElementById('hist-total-badge');
+        const pageInfo = document.getElementById('hist-page-info');
+        const pageNumbers = document.getElementById('hist-page-numbers');
+        const btnPrev = document.getElementById('btn-prev-page');
+        const btnNext = document.getElementById('btn-next-page');
+
+        try {
+          const resp = await fetch(`/api/signals/history?page=${page}&limit=10`);
+          if (!resp.ok) return;
+          const data = await resp.json();
+
+          const trades = data.trades || [];
+          const total = data.total || 0;
+          totalHistPages = data.total_pages || 1;
+          currentHistPage = data.page || page;
+
+          if (totalBadge) totalBadge.textContent = `${total} operaciones`;
+          if (pageInfo) pageInfo.textContent = `Página ${currentHistPage} de ${totalHistPages} (${total} operaciones)`;
+
+          if (btnPrev) btnPrev.disabled = (currentHistPage <= 1);
+          if (btnNext) btnNext.disabled = (currentHistPage >= totalHistPages);
+
+          // 1. Renderizar números de página con ventana deslizante
+          if (pageNumbers) {
+            let numHtml = '';
+            const maxVisible = 5;
+            let startPage = Math.max(1, currentHistPage - 2);
+            let endPage = Math.min(totalHistPages, startPage + maxVisible - 1);
+
+            if (endPage - startPage < maxVisible - 1) {
+              startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+
+            if (startPage > 1) {
+              numHtml += `<button class="hist-num-btn" onclick="goToHistPage(1)">1</button>`;
+              if (startPage > 2) numHtml += `<span class="hist-num-ellipsis">...</span>`;
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+              const activeCls = (i === currentHistPage) ? 'active' : '';
+              numHtml += `<button class="hist-num-btn ${activeCls}" onclick="goToHistPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalHistPages) {
+              if (endPage < totalHistPages - 1) numHtml += `<span class="hist-num-ellipsis">...</span>`;
+              numHtml += `<button class="hist-num-btn" onclick="goToHistPage(${totalHistPages})">${totalHistPages}</button>`;
+            }
+
+            pageNumbers.innerHTML = numHtml;
+          }
+
+          // 2. Renderizar tabla de escritorio y tarjetas móviles
+          if (trades.length === 0) {
+            if (tableBody) {
+              tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 18px;">No hay operaciones registradas aún.</td></tr>`;
+            }
+            if (mobileContainer) {
+              mobileContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 16px; font-size: 0.8rem;">No hay operaciones registradas aún.</div>`;
+            }
+            return;
+          }
+
+          let tableHtml = '';
+          let mobileHtml = '';
+
+          trades.forEach(t => {
+            const pair = t.pair || 'EURUSD-OTC';
+            const dec = pair.includes('JPY') ? 3 : 5;
+            const dir = t.direction || 'CALL';
+            const isCall = (dir === 'CALL' || dir === 'COMPRA');
+            const dirBadge = isCall 
+              ? `<span class="pill-call"><i class="fa-solid fa-arrow-trend-up"></i> CALL</span>`
+              : `<span class="pill-put"><i class="fa-solid fa-arrow-trend-down"></i> PUT</span>`;
+
+            const res = t.result || 'WIN';
+            let resBadge = '';
+            if (res === 'WIN') {
+              resBadge = `<span class="pill-itm">ITM ✅</span>`;
+            } else if (res === 'LOSS') {
+              resBadge = `<span class="pill-otm">OTM ❌</span>`;
+            } else {
+              resBadge = `<span class="pill-doji">DOJI ⚪</span>`;
+            }
+
+            const ep = t.entry_price ? parseFloat(t.entry_price).toFixed(dec) : '--';
+            const cp = t.close_price ? parseFloat(t.close_price).toFixed(dec) : '--';
+            const profit = parseFloat(t.profit || 0);
+            const profitSign = profit >= 0 ? '+' : '';
+            const profitClass = profit >= 0 ? 'text-green' : 'text-red';
+            const profitHtml = `<span class="${profitClass}">${profitSign}$${profit.toFixed(2)}</span>`;
+
+            const step = t.martingale_step || 0;
+            let stepBadge = '';
+            if (step === 1) {
+              stepBadge = `<span class="pill-step-e1"><i class="fa-solid fa-circle-dot"></i> Apertura</span>`;
+            } else if (step === 2) {
+              stepBadge = `<span class="pill-step-e2"><i class="fa-solid fa-arrows-rotate"></i> Retroceso</span>`;
+            } else {
+              stepBadge = `<span class="text-muted">M5</span>`;
+            }
+
+            const timeStr = t.entry_time || t.close_time || '--:--:--';
+
+            // Desktop Row
+            tableHtml += `
+              <tr>
+                <td><code>${timeStr}</code></td>
+                <td><strong>${pair}</strong></td>
+                <td>${dirBadge}</td>
+                <td>${stepBadge}</td>
+                <td><code>${ep}</code></td>
+                <td><code>${cp}</code></td>
+                <td>${resBadge}</td>
+                <td>${profitHtml}</td>
+              </tr>
+            `;
+
+            // Mobile Card Item (Ultracompacto y adaptable)
+            mobileHtml += `
+              <div class="m-hist-item">
+                <div class="m-hist-top">
+                  <div class="m-hist-left">
+                    <span class="m-hist-pair">${pair}</span>
+                    ${dirBadge}
+                    ${stepBadge}
+                  </div>
+                  <div>${resBadge}</div>
+                </div>
+                <div class="m-hist-bottom">
+                  <span class="m-hist-time"><i class="fa-regular fa-clock"></i> ${timeStr}</span>
+                  <span class="m-hist-prices">${ep} ➔ ${cp}</span>
+                  <span class="m-hist-profit">${profitHtml}</span>
+                </div>
+              </div>
+            `;
+          });
+
+          if (tableBody) tableBody.innerHTML = tableHtml;
+          if (mobileContainer) mobileContainer.innerHTML = mobileHtml;
+
+        } catch (e) {
+          console.error("Error cargando historial de señales:", e);
+        }
+      }
+
+      // Cargar página 1 de inmediato
+      loadHistoryPage(1);
+
+      // Auto-actualizar historial periódicamente si el usuario está en la página 1
+      setInterval(() => {
+        if (currentHistPage === 1) {
+          loadHistoryPage(1);
+        }
+      }, 10000);
       }
     });
   </script>

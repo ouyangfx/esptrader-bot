@@ -16,7 +16,9 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 class DatabaseManager:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        d = os.path.dirname(self.db_path)
+        if d:
+            os.makedirs(d, exist_ok=True)
         self._init_db()
 
     def _get_connection(self):
@@ -107,6 +109,49 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error cargando trades de SQLite DB: {e}")
             return []
+
+    def get_trades_paginated(self, page: int = 1, limit: int = 10) -> Dict[str, Any]:
+        """Obtiene las operaciones paginadas en orden descendente (más recientes primero)."""
+        try:
+            page = max(1, int(page))
+            limit = max(1, min(100, int(limit)))
+            offset = (page - 1) * limit
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) as total FROM trades")
+                total = cursor.fetchone()["total"] or 0
+
+                cursor.execute("""
+                    SELECT id, order_id, pair, direction, result, profit, amount,
+                           entry_price, close_price, entry_time, close_time, martingale_step, created_at
+                    FROM trades
+                    ORDER BY id DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset))
+                rows = cursor.fetchall()
+                trades = []
+                for r in rows:
+                    d = dict(r)
+                    m_step = d.get("martingale_step", 0)
+                    if m_step == 1:
+                        d["entry_label"] = "E1 Apertura"
+                    elif m_step == 2:
+                        d["entry_label"] = "E2 Retroceso"
+                    else:
+                        d["entry_label"] = "Entrada M5"
+                    trades.append(d)
+
+                total_pages = max(1, (total + limit - 1) // limit)
+                return {
+                    "trades": trades,
+                    "total": total,
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": total_pages
+                }
+        except Exception as e:
+            logger.error(f"Error obteniendo trades paginados: {e}")
+            return {"trades": [], "total": 0, "page": 1, "limit": limit, "total_pages": 1}
 
     def get_stats(self) -> Dict[str, Any]:
         """Calcula estadísticas históricas acumuladas desde la base de datos."""

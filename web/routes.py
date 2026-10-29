@@ -137,6 +137,12 @@ async def api_signals_live(request: Request):
         "history": engine.trade_history[-10:]
     }
 
+@router.get("/api/signals/history")
+async def api_signals_history(request: Request, page: int = 1, limit: int = 10):
+    """Retorna el historial paginado de señales/operaciones (10 por página por defecto)."""
+    engine = request.app.state.engine
+    return engine.db.get_trades_paginated(page=page, limit=limit)
+
 @router.get("/api/candles")
 async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe: int = 300, count: int = 150):
     """

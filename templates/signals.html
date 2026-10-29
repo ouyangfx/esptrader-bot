@@ -1394,9 +1394,9 @@
         let activeEvent = null;
         let eventCategory = 'SEARCHING';
 
-        if (mode === 'CONFIRMING' && data.pending_signal) {
+        if ((mode === 'CONFIRMING' || mode === 'WAITING_PULLBACK') && data.pending_signal) {
           activeEvent = data.pending_signal;
-          eventCategory = 'CONFIRMING';
+          eventCategory = 'WAITING_PULLBACK';
         } else if (mode === 'IN_TRADE' && data.current_trade) {
           activeEvent = data.current_trade;
           eventCategory = 'IN_TRADE';
@@ -1438,17 +1438,18 @@
 
           // Sonido de alerta si es señal nueva
           const sigKey = `${pair}_${dir}_${activeEvent.time || activeEvent.entry_time}`;
-          if ((eventCategory === 'CONFIRMING' || eventCategory === 'IN_TRADE') && sigKey !== lastPlayedSignalKey) {
+          if ((eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK' || eventCategory === 'IN_TRADE') && sigKey !== lastPlayedSignalKey) {
             playAlertChime();
             lastPlayedSignalKey = sigKey;
           }
 
-          if (eventCategory === 'CONFIRMING') {
-            statusTitleTextEl.textContent = `¡SEÑAL ${dir} EN ${pair}! CONFIRMANDO VELA M5...`;
+          if (eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK') {
+            statusTitleTextEl.textContent = `🎯 ¡SEÑAL CONFIRMADA EN ${pair}! ESPERANDO RETROCESO FIBO 50%`;
+            statusTagEl.textContent = 'ESPERANDO RETROCESO';
             statusTagEl.className = 'status-tag-main status-confirming';
             sigEventTypeBadge.className = 'badge-event-type status-confirming';
-            sigEventTypeBadge.innerHTML = '<i class="fa-solid fa-bolt"></i> PRE-SEÑAL EN CONFIRMACIÓN';
-            cdTitle.textContent = 'CIERRE DE VELA EN';
+            sigEventTypeBadge.innerHTML = '<i class="fa-solid fa-arrows-split-up-and-left"></i> RETROCESO FIBO 50%';
+            cdTitle.textContent = 'VENTANA RETROCESO';
             radarSearchingStrip.style.display = 'none';
           } else if (eventCategory === 'IN_TRADE') {
             statusTitleTextEl.textContent = `OPERACIÓN ACTIVA (5M) EN ${pair}`;
@@ -1474,7 +1475,7 @@
             });
           }
 
-          if ((eventCategory === 'CONFIRMING' || eventCategory === 'IN_TRADE') && pair !== currentChartPair) {
+          if ((eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK' || eventCategory === 'IN_TRADE') && pair !== currentChartPair) {
             switchChartPair(pair);
           }
 

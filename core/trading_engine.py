@@ -302,7 +302,7 @@ class TradingEngine:
             # Estado visible del par en la cuadrícula
             if self.engine_mode != "SEARCHING" and self.locked_pair == p:
                 card_state = self.engine_mode
-                card_msg = "Confirmando vela..." if self.engine_mode == "CONFIRMING" else "Operación en curso..."
+                card_msg = "Esperando retroceso Fibo..." if self.engine_mode in ("CONFIRMING", "WAITING_PULLBACK") else "Operación en curso..."
             elif self.engine_mode != "SEARCHING" and self.locked_pair != p:
                 card_state = "PAUSED"
                 card_msg = f"Pausado ({self.locked_pair} activo)"
@@ -369,6 +369,110 @@ class TradingEngine:
             except Exception:
                 dead_clients.add(ws)
         self.websocket_listeners.difference_update(dead_clients)
+
+    async def broadcast_custom_text(self, text: str):
+        """Transmite texto plano de alerta a los WebSockets conectados."""
+        dead_clients = set()
+        for ws in self.websocket_listeners:
+            try:
+                await ws.send_text(text)
+            except Exception:
+                dead_clients.add(ws)
+        self.websocket_listeners.difference_update(dead_clients)
+
+    async def _evaluar_pullback_tick(self, pair: str, current_price: float, server_ts: float):
+        """Evalúa si el precio en vivo toca la zona de retroceso Fibonacci (50% - 61.8%) en la vela M5."""
+        if not self.pending_signal or self.engine_mode not in ("CONFIRMING", "WAITING_PULLBACK"):
+            return
+
+        direction = self.pending_signal["direction"]
+        fibo_50 = float(self.pending_signal.get("fibo_50", 0.0))
+        fibo_618 = float(self.pending_signal.get("fibo_618", 0.0))
+        pip_unit = 0.01 if "JPY" in pair else 0.0001
+        tolerance = pip_unit * 1.0  # 1 pip de tolerancia
+
+        # Condición de retroceso hacia la zona Fibo
+        pullback_hit = False
+        if direction in ("CALL", "COMPRA") and current_price <= (fibo_50 + tolerance):
+            pullback_hit = True
+        elif direction in ("PUT", "VENTA") and current_price >= (fibo_50 - tolerance):
+            pullback_hit = True
+
+        if pullback_hit:
+            trade_amount = self.current_amount
+            remaining_sec = max(60, self.pending_signal["end_ts"] - server_ts)
+            exp_min = max(1, min(5, int(round(remaining_sec / 60.0))))
+
+            entry_time_str = datetime.fromtimestamp(server_ts).strftime("%H:%M:%S")
+            expire_ts = self.pending_signal["end_ts"]
+            expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
+
+            logger.info(
+                f"🎯 ¡RETROCESO FIBONACCI ALCANZADO! {pair} {direction} @ {current_price:.5f} "
+                f"(Nivel 50%: {fibo_50:.5f}) - Ejecutando a {exp_min}m M5"
+            )
+
+            # Prevenir ejecuciones múltiples simultáneas
+            self.engine_mode = "IN_TRADE"
+            ok, order_id, msg = await asyncio.to_thread(
+                self.iq.buy_option, pair, trade_amount, direction, exp_min
+            )
+
+            if ok:
+                self.current_trade = {
+                    "id": order_id,
+                    "pair": pair,
+                    "direction": direction,
+                    "entry_time": entry_time_str,
+                    "entry_price": current_price,
+                    "fibo_50": fibo_50,
+                    "fibo_618": fibo_618,
+                    "amount": trade_amount,
+                    "expiration": exp_min,
+                    "start_ts": server_ts,
+                    "end_ts": expire_ts
+                }
+                self.current_status_message = f"OPERACIÓN EN RETROCESO: {pair} {direction} ${trade_amount} (Exp: {expire_time_str})"
+
+                sig_event = {
+                    "id": order_id,
+                    "time": entry_time_str,
+                    "pair": pair,
+                    "direction": direction,
+                    "type": "ENTRADA_RETROCESO",
+                    "status": "OPERACIÓN EN CURSO (RETROCESO M5)",
+                    "entry_time": entry_time_str,
+                    "expire_time": expire_time_str,
+                    "entry_price": current_price,
+                    "fibo_50": fibo_50,
+                    "fibo_618": fibo_618,
+                    "tip": f"Entrada ejecutada en retroceso Fibo 50% ({fibo_50:.5f})",
+                    "amount": trade_amount
+                }
+                self.last_signal_event = sig_event
+                self.live_signals_feed.append(sig_event)
+                self.live_signals_feed = self.live_signals_feed[-10:]
+
+                # Notificar a Telegram
+                self.telegram.notify_pullback_entry(
+                    pair=pair,
+                    direction=direction,
+                    entry_time=entry_time_str,
+                    entry_price=current_price,
+                    fibo_level=fibo_50,
+                    expire_time=expire_time_str,
+                    amount=trade_amount
+                )
+
+                # Notificar a Web vía WebSocket
+                cmd = "COMPRA" if direction in ("CALL", "COMPRA") else "VENTA"
+                await self.broadcast_custom_text(f"{cmd}|{pair}")
+                logger.info(f"Orden en retroceso colocada exitosamente en {pair} {direction} (ID: {order_id})")
+            else:
+                logger.warning(f"Error al enviar orden en retroceso a IQ Option ({pair}): {msg}")
+                self.engine_mode = "SEARCHING"
+                self.locked_pair = None
+                self.pending_signal = None
 
     async def _ejecutar_gatillo_sniper(self, gatillo: Dict[str, Any]):
         """Ejecuta inmediatamente la orden sniper adelantada (Intra-bar M5)."""
@@ -485,11 +589,10 @@ class TradingEngine:
                         if pair == self.active_pair:
                             self.current_tick_price = p_state["tick_price"]
 
-                        # Evaluación en tiempo real del Gatillo Sniper Cuantitativo
-                        if self.engine_mode == "SEARCHING" and p_state["tick_price"] > 0:
-                            gatillo = await self.sniper.evaluar_tick_sniper(pair, p_state["tick_price"], server_ts)
-                            if gatillo and self.engine_mode == "SEARCHING":
-                                await self._ejecutar_gatillo_sniper(gatillo)
+                        # Evaluación en tiempo real del Retroceso Fibonacci M5 (Alternativa A)
+                        if self.engine_mode in ("CONFIRMING", "WAITING_PULLBACK") and pair == self.locked_pair and p_state["tick_price"] > 0:
+                            await self._evaluar_pullback_tick(pair, p_state["tick_price"], server_ts)
+                            if self.engine_mode == "IN_TRADE":
                                 break
 
                     self.seconds_left_in_candle = self.timeframe - (current_int_sec % self.timeframe)
@@ -579,25 +682,27 @@ class TradingEngine:
 
                         candle_dt_str = datetime.fromtimestamp(closed_candle_time).strftime("%H:%M:%S")
 
-                        # Cálculo preliminar de Fibonacci uniendo la vela previa y la de señal
+                        # Cálculo de Fibonacci en la vela de señal recién cerrada (Alternativa A)
                         s_min = float(closed_candle.get('min', closed_candle.get('low', closed_candle['close'])))
                         s_max = float(closed_candle.get('max', closed_candle.get('high', closed_candle['close'])))
-                        p_min = float(candles[-3].get('min', candles[-3].get('low', candles[-3]['close']))) if len(candles) >= 3 else s_min
-                        p_max = float(candles[-3].get('max', candles[-3].get('high', candles[-3]['close']))) if len(candles) >= 3 else s_max
-                        init_min = min(s_min, p_min)
-                        init_max = max(s_max, p_max)
-                        init_range = max(1e-5, init_max - init_min)
-                        if direction == "CALL":
-                            init_fibo_50 = init_max - (init_range * 0.50)
-                            init_fibo_618 = init_max - (init_range * 0.618)
-                        else:
-                            init_fibo_50 = init_min + (init_range * 0.50)
-                            init_fibo_618 = init_min + (init_range * 0.618)
+                        s_close = float(closed_candle['close'])
+                        s_range = max(1e-5, s_max - s_min)
+                        
+                        if direction in ("CALL", "COMPRA"):
+                            init_fibo_50 = s_max - (s_range * 0.50)
+                            init_fibo_618 = s_max - (s_range * 0.618)
+                        else:  # PUT / VENTA
+                            init_fibo_50 = s_min + (s_range * 0.50)
+                            init_fibo_618 = s_min + (s_range * 0.618)
 
-                        # ¡BLOQUEAR MOTOR EN ESTE PAR! (Una señal a la vez)
+                        # Expiración: Cierre de la vela M5 actual que acaba de iniciar
+                        current_m5_end = ((server_ts // 300) + 1) * 300
+                        expire_time_str = datetime.fromtimestamp(current_m5_end).strftime("%H:%M:%S")
+
+                        # ¡BLOQUEAR MOTOR EN ESTE PAR PARA RETROCESO! (Alternativa A)
                         self.locked_pair = pair
                         self.active_pair = pair
-                        self.engine_mode = "CONFIRMING"
+                        self.engine_mode = "WAITING_PULLBACK"
                         
                         self.pending_signal = {
                             "pair": pair,
@@ -605,164 +710,94 @@ class TradingEngine:
                             "detected_at": time_str,
                             "candle_time": candle_dt_str,
                             "signal_candle_from": closed_candle_time,
-                            "confirm_candle_from": candles[-1].get('from', 0),
                             "signal_candle": closed_candle,
+                            "signal_price": s_close,
                             "fibo_50": round(init_fibo_50, 5),
                             "fibo_618": round(init_fibo_618, 5),
+                            "start_ts": server_ts,
+                            "end_ts": current_m5_end,
+                            "max_wait_seconds": 180,
                             "confluence_info": conf_reason
                         }
-
-                        expire_ts = closed_candle_time + (self.expiration * 60) + 300
-                        expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
 
                         sig_event = {
                             "id": int(time.time()),
                             "time": time_str,
                             "pair": pair,
                             "direction": direction,
-                            "type": "PRE_SEÑAL",
-                            "status": "CONFIRMANDO VELA M5",
-                            "entry_time": "Próxima vela (Seg 00)",
+                            "type": "SEÑAL_M5",
+                            "status": "ESPERANDO RETROCESO FIBO 50% - 61.8%",
+                            "entry_time": "Al tocar retroceso Fibo",
                             "expire_time": expire_time_str,
-                            "entry_price": float(closed_candle['close']),
+                            "entry_price": s_close,
                             "fibo_50": round(init_fibo_50, 5),
                             "fibo_618": round(init_fibo_618, 5),
-                            "tip": "Esperar retroceso a zona Fibo 50% - 61.8% para mayor efectividad (Sniper)",
+                            "tip": f"Esperar retroceso a zona Fibo 50% ({init_fibo_50:.5f}) - 61.8% ({init_fibo_618:.5f}) para entrada óptima.",
                             "confluence": conf_reason
                         }
                         self.last_signal_event = sig_event
                         self.live_signals_feed.append(sig_event)
                         self.live_signals_feed = self.live_signals_feed[-10:]
 
-                        tf_label = "5M"
-                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando confirmación M5 (Otros pares en pausa)..."
-                        logger.info(f"Señal VIP detectada: {pair} {direction}. Bloqueando escaneo en {pair} hasta resultado.")
+                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando retroceso a Fibo 50% ({init_fibo_50:.5f})..."
+                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA M5! {pair} {direction}. Esperando retroceso Fibo 50%: {init_fibo_50:.5f}")
                         
-                        self.telegram.notify_pre_signal(pair, direction, tf_label, candle_dt_str)
-                        # Salir inmediatamente del bucle: NO permitir ninguna otra señal
+                        # Notificación inmediata a Telegram (Alternativa A)
+                        self.telegram.notify_signal_m5_pullback(
+                            pair=pair,
+                            direction=direction,
+                            candle_time=candle_dt_str,
+                            signal_price=s_close,
+                            fibo_50=round(init_fibo_50, 5),
+                            fibo_618=round(init_fibo_618, 5),
+                            expire_time=expire_time_str
+                        )
+                        
+                        # Notificación a Web vía WebSocket
+                        await self.broadcast_custom_text(f"PREALERTA|{pair}|{direction}")
                         break
 
         # =========================================================
-        # FASE 2: CONFIRMING (Exclusivo para el par bloqueado)
+        # FASE 2: WAITING_PULLBACK (Monitorea retroceso del par bloqueado)
         # =========================================================
-        elif self.engine_mode == "CONFIRMING":
+        elif self.engine_mode in ("CONFIRMING", "WAITING_PULLBACK"):
             pair = self.locked_pair
             direction = self.pending_signal["direction"]
+            p_state = self.pairs_state.get(pair, {})
+            current_price = p_state.get("tick_price", 0.0)
+            elapsed = server_ts - self.pending_signal.get("start_ts", server_ts)
+            max_wait = self.pending_signal.get("max_wait_seconds", 180)
+            fibo_50 = self.pending_signal.get("fibo_50", 0.0)
+            fibo_618 = self.pending_signal.get("fibo_618", 0.0)
+
+            time_left_to_wait = max(0, max_wait - elapsed)
             self.current_status_message = (
-                f"[{time_str}] CONFIRMANDO SEÑAL {direction} EN {pair}: "
-                f"Quedan {self.seconds_left_in_candle}s para evaluar la vela."
+                f"[{time_str}] ESPERANDO RETROCESO {direction} EN {pair}: "
+                f"Precio: {current_price:.5f} | Fibo 50%: {fibo_50:.5f} (Ventana: {time_left_to_wait}s)"
             )
 
-            # En el último segundo de la vela (<= 1s para segundo 00)
-            if self.seconds_left_in_candle <= 1:
-                candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 10)
-                if candles and len(candles) >= 2:
-                    confirm_candle = candles[-1]
-                    c_open = confirm_candle['open']
-                    c_close = confirm_candle['close']
+            # Monitorear tick
+            if current_price > 0:
+                await self._evaluar_pullback_tick(pair, current_price, server_ts)
 
-                    is_confirmed = False
-                    reason = ""
+            if self.engine_mode == "IN_TRADE":
+                return
 
-                    if direction == "CALL":
-                        if c_close > c_open:
-                            is_confirmed = True
-                        else:
-                            reason = f"Vela bajista/doji (Open: {c_open}, Close: {c_close})"
-                    elif direction == "PUT":
-                        if c_close < c_open:
-                            is_confirmed = True
-                        else:
-                            reason = f"Vela alcista/doji (Open: {c_open}, Close: {c_close})"
-
-                    if is_confirmed:
-                        entry_time_str = datetime.fromtimestamp(server_ts + 1).strftime("%H:%M:%S")
-                        trade_amount = self.current_amount
-
-                        # Calcular niveles de Fibonacci (50% y 61.8%) uniendo las mechas de ambas velas M5
-                        signal_candle = self.pending_signal.get("signal_candle", {})
-                        sig_min = float(signal_candle.get('min', signal_candle.get('low', signal_candle.get('close', c_open))))
-                        sig_max = float(signal_candle.get('max', signal_candle.get('high', signal_candle.get('close', c_open))))
-                        conf_min = float(confirm_candle.get('min', confirm_candle.get('low', confirm_candle.get('close', c_close))))
-                        conf_max = float(confirm_candle.get('max', confirm_candle.get('high', confirm_candle.get('close', c_close))))
-
-                        overall_min = min(sig_min, conf_min)
-                        overall_max = max(sig_max, conf_max)
-                        fibo_range = max(1e-5, overall_max - overall_min)
-
-                        if direction == "CALL":
-                            fibo_50 = overall_max - (fibo_range * 0.50)
-                            fibo_618 = overall_max - (fibo_range * 0.618)
-                        else:  # PUT
-                            fibo_50 = overall_min + (fibo_range * 0.50)
-                            fibo_618 = overall_min + (fibo_range * 0.618)
-
-                        expire_ts = server_ts + (self.expiration * 60)
-                        expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
-
-                        logger.info(f"¡Vela confirmada! {direction} en {pair}. Fibo 50%: {fibo_50:.5f}, Fibo 61.8%: {fibo_618:.5f}. Ejecutando a las {entry_time_str}")
-                        ok, order_id, msg = await asyncio.to_thread(self.iq.buy_option, pair, trade_amount, direction, self.expiration)
-
-                        if ok:
-                            self.current_trade = {
-                                "id": order_id,
-                                "pair": pair,
-                                "direction": direction,
-                                "entry_time": entry_time_str,
-                                "entry_price": c_close,
-                                "fibo_50": round(fibo_50, 5),
-                                "fibo_618": round(fibo_618, 5),
-                                "amount": trade_amount,
-                                "expiration": self.expiration,
-                                "start_ts": server_ts,
-                                "end_ts": expire_ts
-                            }
-                            self.engine_mode = "IN_TRADE"
-                            self.current_status_message = f"OPERACIÓN EN CURSO (5M): {pair} {direction} ${trade_amount} (Cierre: {expire_time_str})"
-                            
-                            sig_event = {
-                                "id": order_id,
-                                "time": entry_time_str,
-                                "pair": pair,
-                                "direction": direction,
-                                "type": "OPERACION_M5",
-                                "status": "OPERACIÓN EN CURSO (M5)",
-                                "entry_time": entry_time_str,
-                                "expire_time": expire_time_str,
-                                "entry_price": c_close,
-                                "fibo_50": round(fibo_50, 5),
-                                "fibo_618": round(fibo_618, 5),
-                                "tip": "Retroceso Fibo 50% - 61.8% activo. Expiración al término de la vela M5.",
-                                "amount": trade_amount
-                            }
-                            self.last_signal_event = sig_event
-                            self.live_signals_feed.append(sig_event)
-                            self.live_signals_feed = self.live_signals_feed[-10:]
-
-                            self.telegram.notify_entry(
-                                pair=pair,
-                                direction=direction,
-                                entry_time=entry_time_str,
-                                entry_price=c_close,
-                                expiration=self.expiration,
-                                amount=trade_amount,
-                                fibo_50=fibo_50,
-                                fibo_618=fibo_618,
-                                expire_time=expire_time_str
-                            )
-                        else:
-                            logger.error(f"Error al enviar orden en {pair}: {msg}")
-                            # Si falló la orden, desbloquear y volver a buscar
-                            self.engine_mode = "SEARCHING"
-                            self.locked_pair = None
-                            self.pending_signal = None
-                    else:
-                        logger.info(f"Señal en {pair} no confirmada: {reason}. Reanudando escaneo general.")
-                        self.telegram.notify_confirmation_failed(pair, direction, reason)
-                        # No confirmada: desbloquear y volver a analizar todos los pares
-                        self.engine_mode = "SEARCHING"
-                        self.locked_pair = None
-                        self.pending_signal = None
+            # Si transcurrieron más de 180s o quedan menos de 90s para el cierre de vela M5
+            seconds_left_in_m5 = max(0, self.pending_signal.get("end_ts", server_ts) - server_ts)
+            if elapsed >= max_wait or seconds_left_in_m5 <= 90:
+                logger.info(
+                    f"Tiempo de retroceso agotado ({elapsed}s transcurridos, quedan {seconds_left_in_m5}s en M5) "
+                    f"para {pair} {direction}. Cancelando entrada para proteger capital."
+                )
+                self.telegram.notify_pullback_cancelled(
+                    pair=pair,
+                    direction=direction,
+                    reason=f"El precio no retrocedió a la zona Fibo 50% ({fibo_50:.5f}) dentro de los primeros {max_wait}s."
+                )
+                self.engine_mode = "SEARCHING"
+                self.locked_pair = None
+                self.pending_signal = None
 
         # =========================================================
         # FASE 3: IN_TRADE (Exclusivo: espera hasta el cierre exacto)

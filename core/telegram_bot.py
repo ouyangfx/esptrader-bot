@@ -43,6 +43,56 @@ class TelegramNotifier:
             logger.error(f"Excepción enviando mensaje Telegram: {e}")
             return False
 
+    def notify_signal_m5_pullback(self, pair: str, direction: str, candle_time: str, signal_price: float,
+                                  fibo_50: float, fibo_618: float, expire_time: str):
+        """Notificación inmediata al cierre de la vela M5 con niveles de retroceso Fibonacci (Alternativa A)."""
+        icon = "🟢 COMPRA / SUBE (CALL)" if direction in ("CALL", "COMPRA") else "🔴 VENTA / BAJA (PUT)"
+        dir_badge = "COMPRA" if direction in ("CALL", "COMPRA") else "VENTA"
+        dir_icon = "🟢" if direction in ("CALL", "COMPRA") else "🔴"
+        retracement_dir = "hacia abajo (descuento)" if direction in ("CALL", "COMPRA") else "hacia arriba (retesteo)"
+        msg = (
+            f"🎯 <b>¡SEÑAL CONFIRMADA M5!</b> {dir_icon}\n\n"
+            f"📊 <b>Par:</b> <code>{pair}</code>\n"
+            f"📈 <b>Dirección:</b> <b>{icon}</b>\n"
+            f"💵 <b>Precio Señal:</b> <code>{signal_price:.5f}</code>\n"
+            f"🕐 <b>Hora Señal:</b> <code>{candle_time}</code>\n"
+            f"⏱ <b>Expiración:</b> <code>{expire_time}</code> (Cierre de vela M5)\n\n"
+            f"📐 <b>ZONA DE RETROCESO FIBONACCI:</b>\n"
+            f"  🔹 <b>Fibo 50.0%:</b> <code>{fibo_50:.5f}</code>\n"
+            f"  🔹 <b>Fibo 61.8%:</b> <code>{fibo_618:.5f}</code>\n\n"
+            f"💡 <i>Estrategia: Esperar retroceso {retracement_dir} a la zona 50% - 61.8% para entrar con ventaja.</i>\n"
+            f"🤖 <i>El bot ejecutará en automático al tocar la zona de retroceso.</i>\n\n"
+            f"📢 <b>Trader 4 Less</b> | @traderfxapp"
+        )
+        return self.send_message(msg)
+
+    def notify_pullback_entry(self, pair: str, direction: str, entry_time: str, entry_price: float,
+                              fibo_level: float, expire_time: str, amount: float = 0.0):
+        """Notificación cuando el precio toca el retroceso Fibonacci y se dispara la orden."""
+        icon = "🟢 COMPRA (CALL)" if direction in ("CALL", "COMPRA") else "🔴 VENTA (PUT)"
+        msg = (
+            f"⚡ <b>¡ORDEN EJECUTADA EN RETROCESO!</b> ⚡\n\n"
+            f"📊 <b>Par:</b> <code>{pair}</code>\n"
+            f"🚀 <b>Acción:</b> <b>{icon}</b>\n"
+            f"🎯 <b>Precio Entrada:</b> <code>{entry_price:.5f}</code>\n"
+            f"📐 <b>Nivel Fibo Rebotado:</b> <code>{fibo_level:.5f}</code>\n"
+            f"⏱ <b>Expiración:</b> 🏁 <code>{expire_time}</code> (Fin vela M5)\n"
+            f"💰 <b>Importe:</b> <code>${amount:.2f}</code> (Flat sin martingala)\n\n"
+            f"📢 <b>Trader 4 Less</b> | @traderfxapp"
+        )
+        return self.send_message(msg)
+
+    def notify_pullback_cancelled(self, pair: str, direction: str, reason: str):
+        """Notificación cuando la vela no retrocede en el tiempo límite y se cancela por seguridad."""
+        msg = (
+            f"⚠️ <b>SEÑAL EXPIRADA (SIN RETROCESO)</b>\n\n"
+            f"📊 <b>Par:</b> <code>{pair}</code> ({direction})\n"
+            f"ℹ️ <b>Razón:</b> {reason}\n"
+            f"🛡 <b>Protección de Capital:</b> No se ingresa tarde en el techo o piso.\n\n"
+            f"📡 <i>Continuando escaneo del mercado...</i>"
+        )
+        return self.send_message(msg)
+
     def notify_pre_signal(self, pair: str, direction: str, timeframe_str: str, candle_time: str):
         """Notificación cuando el script detecta la condición (Palabra 'SEÑAL')"""
         icon = "🟢" if direction == "CALL" else "🔴"

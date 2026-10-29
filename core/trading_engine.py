@@ -20,6 +20,7 @@ from core.indicator import ScriptVipIndicator
 from core.iq_client import IQOptionClient
 from core.telegram_bot import TelegramNotifier
 from core.database import DatabaseManager
+from core.sniper_trigger import SniperQuantitativeTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,10 @@ class TradingEngine:
         self.current_status_message = "Bot detenido"
         self.current_tick_price = 0.0
         self.seconds_left_in_candle = 0
+
+        # Módulo de Gatillo Sniper Cuantitativo (M15 / M5 / 30s)
+        self.sniper = SniperQuantitativeTrigger(self)
+        self.last_m15_scan_time = 0
 
     def _scan_recent_historical_signals(self):
         """Si live_signals_feed está vacío, analiza las velas de los pares para precargar las últimas señales reales calculadas con Fibonacci 50% y 61.8%."""
@@ -346,6 +351,102 @@ class TradingEngine:
                 dead_clients.add(ws)
         self.websocket_listeners.difference_update(dead_clients)
 
+    async def obtener_velas_30s(self, pair: str) -> list:
+        """Obtiene las velas de 30 segundos más recientes para evaluar la anatomía de rechazo."""
+        return await asyncio.to_thread(self.iq.get_candles, pair, 30, 5)
+
+    async def broadcast_sniper_event(self, event_data: Dict[str, Any]):
+        """Transmite eventos del radar sniper (PREALERTA o GATILLO) a todos los WebSockets."""
+        dead_clients = set()
+        for ws in self.websocket_listeners:
+            try:
+                await ws.send_json({
+                    "type": "sniper_radar",
+                    **event_data
+                })
+                if "msg" in event_data:
+                    await ws.send_text(event_data["msg"])
+            except Exception:
+                dead_clients.add(ws)
+        self.websocket_listeners.difference_update(dead_clients)
+
+    async def _ejecutar_gatillo_sniper(self, gatillo: Dict[str, Any]):
+        """Ejecuta inmediatamente la orden sniper adelantada (Intra-bar M5)."""
+        pair = gatillo["pair"]
+        direction = gatillo["direction"]
+        trade_amount = self.current_amount
+        exp_min = gatillo["expiration_min"]
+        end_ts = gatillo["end_ts"]
+        server_ts = self.iq.get_server_timestamp()
+        dt_str = datetime.fromtimestamp(server_ts).strftime("%H:%M:%S")
+
+        self.locked_pair = pair
+        self.active_pair = pair
+        self.engine_mode = "IN_TRADE"
+        self.current_status_message = f"🎯 ¡GATILLO SNIPER EJECUTADO! {pair} {direction} ${trade_amount} (Expiración M5: {gatillo['expiration_min']}m)"
+
+        ok, order_id, msg = await asyncio.to_thread(self.iq.buy_option, pair, trade_amount, direction, exp_min)
+        if ok:
+            self.current_trade = {
+                "id": order_id,
+                "pair": pair,
+                "direction": direction,
+                "entry_time": dt_str,
+                "entry_price": gatillo["price"],
+                "fibo_50": gatillo["c1"],
+                "fibo_618": gatillo["c2"],
+                "amount": trade_amount,
+                "expiration": exp_min,
+                "start_ts": server_ts,
+                "end_ts": end_ts
+            }
+            expire_time_str = datetime.fromtimestamp(end_ts).strftime("%H:%M:%S")
+
+            sig_event = {
+                "id": order_id,
+                "time": dt_str,
+                "pair": pair,
+                "direction": direction,
+                "type": "SNIPER_30S_M5",
+                "status": "OPERACIÓN SNIPER EN CURSO (M5)",
+                "entry_time": dt_str,
+                "expire_time": expire_time_str,
+                "entry_price": gatillo["price"],
+                "fibo_50": gatillo["c1"],
+                "fibo_618": gatillo["c2"],
+                "tip": f"Gatillo Sniper 30s adelantado en nivel M15. {gatillo['detail']}",
+                "amount": trade_amount
+            }
+            self.last_signal_event = sig_event
+            self.live_signals_feed.append(sig_event)
+            self.live_signals_feed = self.live_signals_feed[-10:]
+
+            await self.broadcast_sniper_event({
+                "event": "GATILLO_EJECUTADO",
+                "pair": pair,
+                "direction": direction,
+                "price": gatillo["price"],
+                "expire_time": expire_time_str,
+                "msg": f"{gatillo['action']}|{pair}"
+            })
+
+            self.telegram.notify_entry(
+                pair=pair,
+                direction=direction,
+                entry_time=dt_str,
+                entry_price=gatillo["price"],
+                expiration=exp_min,
+                amount=trade_amount,
+                fibo_50=gatillo["c1"],
+                fibo_618=gatillo["c2"],
+                expire_time=expire_time_str
+            )
+            logger.info(f"Orden Sniper colocada exitosamente en {pair} {direction} (ID: {order_id})")
+        else:
+            logger.error(f"Error al enviar orden Sniper en {pair}: {msg}")
+            self.engine_mode = "SEARCHING"
+            self.locked_pair = None
+
     async def run_loop(self):
         """Bucle infinito asíncrono con streaming instantáneo de alta frecuencia (50ms)."""
         logger.info("Iniciando bucle de control secuencial de alta frecuencia...")
@@ -358,9 +459,19 @@ class TradingEngine:
                 current_int_sec = int(now)
 
                 # =========================================================
-                # 1. STREAMING DE ALTA FRECUENCIA (CADA 50-70 MS)
+                # 1. STREAMING DE ALTA FRECUENCIA (CADA 50-70 MS) Y RADAR SNIPER
                 # =========================================================
                 if self.is_running and self.selected_pairs:
+                    server_ts = self.iq.get_server_timestamp()
+                    
+                    # Actualizar niveles M15 periódicamente (cada ~45 segundos)
+                    if (current_int_sec - self.last_m15_scan_time) >= 45:
+                        self.last_m15_scan_time = current_int_sec
+                        for p_scan in self.selected_pairs:
+                            m15_candles = await asyncio.to_thread(self.iq.get_candles, p_scan, 900, 25)
+                            if m15_candles:
+                                self.sniper.actualizar_niveles_m15(p_scan, m15_candles, self.indicator)
+
                     for pair in self.selected_pairs:
                         p_state = self.pairs_state.setdefault(pair, {
                             "pair": pair,
@@ -368,6 +479,18 @@ class TradingEngine:
                             "tick_price": 0.0,
                             "last_analyzed_time": 0,
                             "status_msg": "Analizando...",
+                            "seconds_left": self.seconds_left_in_candle
+                        })
+                        p_state["tick_price"] = self.iq.get_realtime_price(pair, self.timeframe)
+                        if pair == self.active_pair:
+                            self.current_tick_price = p_state["tick_price"]
+
+                        # Evaluación en tiempo real del Gatillo Sniper Cuantitativo
+                        if self.engine_mode == "SEARCHING" and p_state["tick_price"] > 0:
+                            gatillo = await self.sniper.evaluar_tick_sniper(pair, p_state["tick_price"], server_ts)
+                            if gatillo and self.engine_mode == "SEARCHING":
+                                await self._ejecutar_gatillo_sniper(gatillo)
+                                break
                             "seconds_left": self.seconds_left_in_candle
                         })
                         p_state["tick_price"] = self.iq.get_realtime_price(pair, self.timeframe)

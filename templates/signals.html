@@ -1190,7 +1190,12 @@
           borderUpColor: '#00f59b',
           borderDownColor: '#ff4757',
           wickUpColor: '#00f59b',
-          wickDownColor: '#ff4757'
+          wickDownColor: '#ff4757',
+          priceLineVisible: true,
+          lastValueVisible: true,
+          priceLineWidth: 1,
+          priceLineColor: '#00d2ff',
+          priceLineStyle: LightweightCharts.LineStyle.Dashed
         });
 
         // Resize automático
@@ -1220,9 +1225,9 @@
         loadCandlesForPair(pair);
       };
 
-      async function loadCandlesForPair(pair) {
+      async function loadCandlesForPair(pair, isSilent = false) {
         const spinner = document.getElementById('chart-loading-spinner');
-        if (spinner) spinner.style.display = 'flex';
+        if (spinner && !isSilent) spinner.style.display = 'flex';
 
         try {
           const resp = await fetch(`/api/candles?pair=${encodeURIComponent(pair)}&timeframe=300&count=90`);
@@ -1242,10 +1247,13 @@
             // Último precio tick
             const lastCandle = currentCandles[currentCandles.length - 1];
             const dec = pair.includes('JPY') ? 3 : 5;
-            document.getElementById('chart-live-price').textContent = (data.current_tick || lastCandle.close).toFixed(dec);
+            const curP = data.current_tick || lastCandle.close;
+            document.getElementById('chart-live-price').textContent = parseFloat(curP).toFixed(dec);
 
-            // Ajustar vista
-            tvChart.timeScale().fitContent();
+            // Ajustar vista solo en carga inicial, no en actualizaciones silenciosas
+            if (!isSilent) {
+              tvChart.timeScale().fitContent();
+            }
 
             // Actualizar líneas Fibonacci si existen
             updateFiboLines(data.fibo);
@@ -1253,7 +1261,7 @@
         } catch (e) {
           console.error("Error cargando velas:", e);
         } finally {
-          if (spinner) spinner.style.display = 'none';
+          if (spinner && !isSilent) spinner.style.display = 'none';
         }
       }
 
@@ -1354,25 +1362,73 @@
 
         // Ticks rápidos en vivo
         if (data.type === 'tick') {
-          if (data.tick_price) {
-            const dec = (data.pair && data.pair.includes('JPY')) ? 3 : 5;
-            const pStr = parseFloat(data.tick_price).toFixed(dec);
-            sigTickPrice.textContent = pStr;
+          // Extraer precio del par actual en el gráfico (desde data.prices o fallback)
+          let chartPrice = null;
+          if (data.prices && data.prices[currentChartPair] !== undefined && data.prices[currentChartPair] > 0) {
+            chartPrice = parseFloat(data.prices[currentChartPair]);
+          } else if (data.pair === currentChartPair && data.tick_price > 0) {
+            chartPrice = parseFloat(data.tick_price);
+          }
 
-            if (data.pair === currentChartPair && currentCandles.length > 0 && candleSeries) {
-              document.getElementById('chart-live-price').textContent = pStr;
-              const last = currentCandles[currentCandles.length - 1];
-              const p = parseFloat(data.tick_price);
-              last.close = p;
-              if (p > last.high) last.high = p;
-              if (p < last.low) last.low = p;
-              candleSeries.update(last);
+          if (chartPrice && chartPrice > 0 && currentCandles && currentCandles.length > 0 && candleSeries) {
+            const dec = currentChartPair.includes('JPY') ? 3 : 5;
+            const pStr = chartPrice.toFixed(dec);
+
+            const livePriceEl = document.getElementById('chart-live-price');
+            if (livePriceEl) {
+              const oldPrice = parseFloat(livePriceEl.textContent);
+              livePriceEl.textContent = pStr;
+              if (!isNaN(oldPrice)) {
+                if (chartPrice > oldPrice) {
+                  livePriceEl.style.color = '#00f59b';
+                } else if (chartPrice < oldPrice) {
+                  livePriceEl.style.color = '#ff4757';
+                }
+              }
+            }
+
+            // Timestamp de la vela M5 (bloques exactos de 300s)
+            const serverTs = data.ts || (Date.now() / 1000);
+            const currentCandleTime = Math.floor(serverTs / 300) * 300;
+            const last = currentCandles[currentCandles.length - 1];
+
+            if (last) {
+              if (last.time === currentCandleTime) {
+                // Actualizar la vela M5 en curso en tiempo real
+                last.close = chartPrice;
+                if (chartPrice > last.high) last.high = chartPrice;
+                if (chartPrice < last.low) last.low = chartPrice;
+                candleSeries.update(last);
+              } else if (currentCandleTime > last.time) {
+                // Iniciar nueva vela M5
+                const newCandle = {
+                  time: currentCandleTime,
+                  open: chartPrice,
+                  high: chartPrice,
+                  low: chartPrice,
+                  close: chartPrice
+                };
+                currentCandles.push(newCandle);
+                candleSeries.update(newCandle);
+              }
             }
           }
+
+          // Tarjeta de señal activa (si coincide el par)
+          if (data.tick_price && data.pair) {
+            const dec = data.pair.includes('JPY') ? 3 : 5;
+            sigTickPrice.textContent = parseFloat(data.tick_price).toFixed(dec);
+          }
+
           if (data.seconds_left !== undefined) {
             sigCountdown.textContent = `${data.seconds_left}s`;
             const pct = Math.max(0, Math.min(100, (data.seconds_left / 300) * 100));
             sigProgress.style.width = `${pct}%`;
+
+            // Sincronización silenciosa al cerrar la vela M5 (segundo 1)
+            if (data.seconds_left === 1) {
+              setTimeout(() => { loadCandlesForPair(currentChartPair, true); }, 1500);
+            }
           }
           return;
         }

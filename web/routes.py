@@ -212,13 +212,16 @@ async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe:
                 }
                 break
 
+    p_st = engine.pairs_state.get(pair, {})
+    curr_tick = p_st.get("tick_price") if p_st and p_st.get("tick_price", 0) > 0 else (formatted_candles[-1]['close'] if formatted_candles else 0.0)
+
     return {
         "pair": pair,
         "timeframe": timeframe,
         "candles": formatted_candles,
         "markers": markers,
         "fibo": fibo_data,
-        "current_tick": engine.current_tick_price if pair == engine.active_pair else (formatted_candles[-1]['close'] if formatted_candles else 0.0)
+        "current_tick": curr_tick
     }
 
 @router.get("/login", response_class=HTMLResponse)

@@ -491,11 +491,6 @@ class TradingEngine:
                             if gatillo and self.engine_mode == "SEARCHING":
                                 await self._ejecutar_gatillo_sniper(gatillo)
                                 break
-                            "seconds_left": self.seconds_left_in_candle
-                        })
-                        p_state["tick_price"] = self.iq.get_realtime_price(pair, self.timeframe)
-                        if pair == self.active_pair:
-                            self.current_tick_price = p_state["tick_price"]
 
                     self.seconds_left_in_candle = self.timeframe - (current_int_sec % self.timeframe)
                     if self.seconds_left_in_candle == self.timeframe:

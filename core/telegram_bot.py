@@ -59,6 +59,41 @@ class TelegramNotifier:
         )
         return self.send_message(msg)
 
+    def notify_sniper_prealert(self, pair: str, direction: str, distance_pips: float, level_price: float):
+        """Notificación cuando el precio entra en el radio de 3 pips de los niveles M15 (c1/c2)."""
+        icon = "🟢 COMPRA" if direction in ("COMPRA", "CALL") else "🔴 VENTA"
+        level_name = "Soporte c2" if direction in ("COMPRA", "CALL") else "Resistencia c1"
+        msg = (
+            f"⚡ <b>¡PRE-ALERTA SNIPER M15 - PREPARAR PAR!</b> ⚡\n\n"
+            f"📊 <b>Activo:</b> <code>{pair}</code>\n"
+            f"🎯 <b>Posible Entrada:</b> <b>{icon}</b>\n"
+            f"📍 <b>Nivel Clave M15 ({level_name}):</b> <code>{level_price:.5f}</code>\n"
+            f"📏 <b>Distancia al nivel:</b> <code>{distance_pips:.1f} pips</code>\n"
+            f"⏱ <b>Expiración objetivo:</b> Cierre de la vela M5 actual\n\n"
+            f"💡 <b>Acción Inmediata:</b> Abre el par en IQ Option y configura el reloj con expiración al término de la vela M5. ¡Atento a la señal definitiva en 30s!\n\n"
+            f"🤖 <b>Trader 4 Less</b> | @traderfxapp"
+        )
+        return self.send_message(msg)
+
+    def notify_sniper_entry(self, pair: str, direction: str, entry_time: str, entry_price: float,
+                            level_price: float, expire_time: str, detail: str, amount: float = 0.0):
+        """Notificación instantánea del gatillo sniper en velas de 30s."""
+        icon = "🟢 COMPRA (CALL)" if direction in ("COMPRA", "CALL") else "🔴 VENTA (PUT)"
+        msg = (
+            f"🎯 <b>¡GATILLO SNIPER M5 ADELANTADO!</b> 🎯\n\n"
+            f"📊 <b>Activo:</b> <code>{pair}</code>\n"
+            f"🎯 <b>Acción:</b> <b>{icon}</b>\n"
+            f"⏰ <b>Hora Disparo:</b> <code>{entry_time}</code>\n"
+            f"💵 <b>Precio Entrada:</b> <code>{entry_price:.5f}</code>\n"
+            f"📍 <b>Nivel M15 Rebotado:</b> <code>{level_price:.5f}</code>\n"
+            f"⏳ <b>Expiración:</b> 🏁 Cierre Vela M5 a las <code>{expire_time}</code>\n"
+            f"💰 <b>Importe:</b> <code>${amount:.2f}</code> (Flat sin martingala)\n"
+            f"🔬 <b>Confirmación 30s:</b> <i>{detail}</i>\n\n"
+            f"⚠️ <b>Regla de Oro:</b> Ejecutar de inmediato. La operación expira exactamente a las <code>{expire_time}</code>.\n\n"
+            f"🤖 <b>Trader 4 Less</b> | @traderfxapp"
+        )
+        return self.send_message(msg)
+
     def notify_confirmation_failed(self, pair: str, direction: str, reason: str):
         """Notificación cuando la siguiente vela no fue a favor"""
         msg = (

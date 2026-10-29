@@ -430,16 +430,16 @@ class TradingEngine:
                 "msg": f"{gatillo['action']}|{pair}"
             })
 
-            self.telegram.notify_entry(
+            # Notificación a Telegram
+            self.telegram.notify_sniper_entry(
                 pair=pair,
                 direction=direction,
                 entry_time=dt_str,
                 entry_price=gatillo["price"],
-                expiration=exp_min,
-                amount=trade_amount,
-                fibo_50=gatillo["c1"],
-                fibo_618=gatillo["c2"],
-                expire_time=expire_time_str
+                level_price=gatillo["level"],
+                expire_time=expire_time_str,
+                detail=gatillo["detail"],
+                amount=trade_amount
             )
             logger.info(f"Orden Sniper colocada exitosamente en {pair} {direction} (ID: {order_id})")
         else:

@@ -191,7 +191,16 @@ class SniperQuantitativeTrigger:
             estado.modo_sniper = True
             if not estado.prealerta_enviada:
                 estado.prealerta_enviada = True
-                logger.info(f"⚡ [RADAR SNIPER] PREALERTA activada en {pair} ({direccion_prealerta}) | Distancia: {min(distancia_c1, distancia_c2)/pip:.1f} pips del nivel M15")
+                dist_pips = min(distancia_c1, distancia_c2) / pip
+                logger.info(f"⚡ [RADAR SNIPER] PREALERTA activada en {pair} ({direccion_prealerta}) | Distancia: {dist_pips:.1f} pips del nivel M15")
+                
+                # Notificar por Telegram a los seguidores
+                if hasattr(self.engine, 'telegram') and self.engine.telegram:
+                    try:
+                        self.engine.telegram.notify_sniper_prealert(pair, direccion_prealerta, dist_pips, nivel_objetivo)
+                    except Exception as e_tg:
+                        logger.error(f"Error enviando prealerta a Telegram: {e_tg}")
+
                 # Notificar por WebSocket al dashboard
                 await self.engine.broadcast_sniper_event({
                     "event": "PREALERTA",

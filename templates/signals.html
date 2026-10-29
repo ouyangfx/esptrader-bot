@@ -506,7 +506,7 @@
       transition: width 1s linear;
     }
 
-    /* FIBO SNIPER BOX */
+    /* ZONA DE COMPRAS / VENTAS BOX */
     .fibo-sniper-box {
       background: var(--bg-box);
       border: 1px solid var(--border-dark);
@@ -524,7 +524,7 @@
     }
 
     .fibo-sniper-title {
-      font-size: 0.88rem;
+      font-size: 0.95rem;
       font-weight: 800;
       color: #ffffff;
       display: flex;
@@ -533,9 +533,9 @@
     }
 
     .fibo-sniper-badge {
-      font-size: 0.72rem;
+      font-size: 0.74rem;
       font-weight: 700;
-      padding: 3px 10px;
+      padding: 3px 12px;
       border-radius: 50px;
       background: rgba(255, 255, 255, 0.06);
       color: #cbd5e1;
@@ -590,16 +590,21 @@
     }
 
     .fibo-sniper-tip {
-      font-size: 0.78rem;
-      color: #94a3b8;
-      line-height: 1.45;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      line-height: 1.5;
       display: flex;
       align-items: flex-start;
       gap: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
     }
     .fibo-sniper-tip i {
       color: var(--iq-gold);
       margin-top: 2px;
+      font-size: 1rem;
     }
 
     /* ==============================================================
@@ -703,7 +708,8 @@
     }
     .fibo-hud-pills {
       display: flex;
-      gap: 6px;
+      align-items: center;
+      gap: 5px;
     }
     .fibo-pill-50 {
       background: rgba(0, 210, 255, 0.12);
@@ -1107,7 +1113,7 @@
         </div>
         <div class="telegram-cta-text">
           <h3>¡Únete a Nuestro Canal VIP en Telegram!</h3>
-          <p>Recibe cada señal M5 confirmada con niveles de Retroceso Fibonacci 50%-61.8% al instante en tu móvil.</p>
+          <p>Recibe cada señal M5 confirmada con su Zona de Compras o Ventas al instante en tu móvil.</p>
         </div>
       </div>
       <a href="https://t.me/traderfxapp" target="_blank" class="btn-cta-telegram">
@@ -1131,7 +1137,7 @@
         <i class="fa-solid fa-satellite-dish radar-scan-icon"></i>
         <h2 class="waiting-title">Algoritmo Cuantitativo Trading SNR Activo (M5)</h2>
         <p class="waiting-desc" id="waiting-desc-text">
-          Analizando 8 pares (4 OTC y 4 Normales) secuencialmente con <b>Filtro de Retroceso Fibonacci 50%-61.8%</b>. Al emitirse una señal, los demás pares quedan en pausa hasta finalizar la operación.
+          Analizando 8 pares (4 OTC y 4 Normales) secuencialmente con <b>Zona de Entrada (Compras / Ventas)</b>. Al emitirse una señal, los demás pares quedan en pausa hasta finalizar la operación.
         </p>
       </div>
 
@@ -1184,35 +1190,37 @@
           </div>
         </div>
 
-        <!-- Cuadro Destacado Fibonacci Sniper para Mayor Efectividad -->
+        <!-- Cuadro Destacado: ZONA DE COMPRAS O VENTAS (AMBOS PRECIOS DEFINEN LA ZONA) -->
         <div class="fibo-sniper-box">
           <div class="fibo-sniper-header">
             <div class="fibo-sniper-title">
               <i class="fa-solid fa-crosshairs" style="color: var(--iq-cyan);"></i>
-              <span>Zona de Retroceso Fibonacci (Entrada de Alta Confluencia)</span>
+              <span id="sig-zone-title">Zona de Compras / Ventas</span>
             </div>
-            <div class="fibo-sniper-badge">
-              <i class="fa-solid fa-shield-halved" style="color: var(--iq-green);"></i> Confluencia Confirmada
+            <div class="fibo-sniper-badge" id="sig-zone-badge">
+              <i class="fa-solid fa-shield-halved" style="color: var(--iq-green);"></i> Rango de Entrada M5
             </div>
           </div>
 
           <div class="fibo-sniper-grid">
             <div class="fibo-card fibo-card-50">
-              <span class="fibo-pct">Nivel Retroceso 50.0%</span>
+              <span class="fibo-pct" id="sig-zone-lbl-1">Límite 1</span>
               <span class="fibo-price-val" id="sig-fibo-50">0.00000</span>
-              <span class="fibo-role">Punto de Entrada Óptimo</span>
+              <span class="fibo-role">Punto de Entrada a la Zona</span>
             </div>
 
             <div class="fibo-card fibo-card-618">
-              <span class="fibo-pct">Nivel Retroceso 61.8%</span>
+              <span class="fibo-pct" id="sig-zone-lbl-2">Límite 2</span>
               <span class="fibo-price-val" id="sig-fibo-618">0.00000</span>
-              <span class="fibo-role">Zona Sniper (Máxima Reacción SNR)</span>
+              <span class="fibo-role">Punto Profundo de la Zona</span>
             </div>
           </div>
 
           <div class="fibo-sniper-tip">
             <i class="fa-solid fa-lightbulb"></i>
-            <span><strong>Consejo Operativo:</strong> Espera el retroceso del precio a los niveles de Fibonacci <strong>50.0%</strong> o <strong>61.8%</strong> antes de ingresar. La expiración siempre se efectúa al <strong>cierre exacto de la vela de 5 minutos</strong>.</span>
+            <span id="sig-zone-tip">
+              <strong>Instrucción Operativa:</strong> Esperar a que la <strong>vela actual de M5</strong> retroceda y toque o ingrese dentro de la <strong>Zona de Entrada</strong> (entre ambos precios) para operar. La expiración siempre se efectúa al <strong>cierre exacto de la vela de 5 minutos</strong>.
+            </span>
           </div>
         </div>
       </div>
@@ -1242,14 +1250,15 @@
         </div>
 
         <div class="chart-header-right">
-          <!-- Fibonacci HUD -->
+          <!-- Zona HUD -->
           <div class="fibo-hud-card" id="fibo-hud-card" style="display: none;">
             <div class="fibo-hud-title">
-              <i class="fa-solid fa-crosshairs" style="color: var(--iq-cyan);"></i> FIBO:
+              <i class="fa-solid fa-crosshairs" style="color: var(--iq-cyan);"></i> <span id="hud-zone-label">ZONA:</span>
             </div>
             <div class="fibo-hud-pills">
-              <span class="fibo-pill-50" id="hud-fibo-50">50%: --</span>
-              <span class="fibo-pill-618" id="hud-fibo-618">61.8%: --</span>
+              <span class="fibo-pill-50" id="hud-fibo-50">--</span>
+              <span style="color: #64748b; font-size: 0.72rem; font-weight: 700;">a</span>
+              <span class="fibo-pill-618" id="hud-fibo-618">--</span>
             </div>
           </div>
 
@@ -1272,8 +1281,8 @@
       <div class="chart-footer-legend">
         <div class="legend-item"><span class="legend-marker marker-call">▲</span> Señal Compra (CALL M5)</div>
         <div class="legend-item"><span class="legend-marker marker-put">▼</span> Señal Venta (PUT M5)</div>
-        <div class="legend-item"><span class="legend-line line-50"></span> Fibo 50.0% (Zona Entrada)</div>
-        <div class="legend-item"><span class="legend-line line-618"></span> Fibo 61.8% (Zona Reacción SNR)</div>
+        <div class="legend-item"><span class="legend-line line-50"></span> Límite Zona 1</div>
+        <div class="legend-item"><span class="legend-line line-618"></span> Límite Zona 2</div>
         <div class="legend-item"><i class="fa-solid fa-bolt" style="color: var(--iq-cyan);"></i> Streaming 25 FPS • Velas del Último Día Actualizadas</div>
       </div>
     </section>
@@ -1347,9 +1356,9 @@
         <div class="tip-card">
           <div class="tip-card-head c-gold">
             <i class="fa-solid fa-crosshairs"></i>
-            <span>Retroceso Fibonacci (M5)</span>
+            <span>Entrada en Zona de Reacción (M5)</span>
           </div>
-          <p>Espera el retroceso del precio a los niveles 50.0% o 61.8% de Fibonacci para ingresar con mejor punto de entrada y máxima probabilidad.</p>
+          <p>Espera a que la vela de 5 minutos retroceda y toque o ingrese dentro de la Zona de Compras o Ventas antes de entrar al mercado.</p>
         </div>
 
         <div class="tip-card">
@@ -1394,7 +1403,7 @@
 
       <div class="footer-bottom-row">
         <span>&copy; 2026 <strong>Trading SNR</strong>. Todos los derechos reservados. Señales cuantitativas gratuitas para la comunidad.</span>
-        <span>Versión 2.5 - Confluencia Fibonacci SNR</span>
+        <span>Versión 2.5 - Confluencia SNR M5</span>
       </div>
     </div>
   </footer>
@@ -1407,6 +1416,7 @@
     let currentCandles = [];
     let fiboLine50 = null;
     let fiboLine618 = null;
+    let currentActiveDirection = 'CALL';
 
     document.addEventListener('DOMContentLoaded', () => {
       const serverClockEl = document.getElementById('server-clock-text');
@@ -1428,8 +1438,14 @@
       const sigCountdown = document.getElementById('sig-countdown');
       const sigProgress = document.getElementById('sig-progress');
       const cdTitle = document.getElementById('cd-title');
+
+      const sigZoneTitle = document.getElementById('sig-zone-title');
+      const sigZoneBadge = document.getElementById('sig-zone-badge');
+      const sigZoneLbl1 = document.getElementById('sig-zone-lbl-1');
+      const sigZoneLbl2 = document.getElementById('sig-zone-lbl-2');
       const sigFibo50 = document.getElementById('sig-fibo-50');
       const sigFibo618 = document.getElementById('sig-fibo-618');
+      const sigZoneTip = document.getElementById('sig-zone-tip');
       const radarSearchingStrip = document.getElementById('radar-searching-strip');
 
       const statWinrate = document.getElementById('stat-winrate');
@@ -1513,7 +1529,7 @@
           width: container.clientWidth,
           height: 490,
           layout: {
-            background: { type: 'solid', color: '#0e1626' }, // Fondo oscuro IQ Option
+            background: { type: 'solid', color: '#0e1626' },
             textColor: '#8092a7',
             fontFamily: "'JetBrains Mono', monospace",
             fontSize: 11
@@ -1539,7 +1555,6 @@
           }
         });
 
-        // Velas estilo IQ Option: Verde #00e676 y Rojo #ff3d60
         candleSeries = tvChart.addCandlestickSeries({
           upColor: '#00e676',
           downColor: '#ff3d60',
@@ -1554,14 +1569,12 @@
           priceLineStyle: LightweightCharts.LineStyle.Dashed
         });
 
-        // Resize automático
         window.addEventListener('resize', () => {
           if (tvChart && container) {
             tvChart.applyOptions({ width: container.clientWidth });
           }
         });
 
-        // Cargar velas del último día para el par inicial
         loadCandlesForPair(currentChartPair);
       }
 
@@ -1569,7 +1582,6 @@
         currentChartPair = pair;
         document.getElementById('chart-active-pair-label').textContent = pair;
 
-        // Actualizar botones
         document.querySelectorAll('.pair-pill-btn').forEach(btn => {
           if (btn.getAttribute('data-pair') === pair) {
             btn.classList.add('active');
@@ -1586,7 +1598,6 @@
         if (spinner && !isSilent) spinner.style.display = 'flex';
 
         try {
-          // Traer hasta 180 velas M5 (cubriendo las últimas 15 horas / día completo en vivo)
           const resp = await fetch(`/api/candles?pair=${encodeURIComponent(pair)}&timeframe=300&count=180`);
           const data = await resp.json();
 
@@ -1594,14 +1605,12 @@
             currentCandles = data.candles;
             candleSeries.setData(currentCandles);
 
-            // Marcadores de señales
             if (data.markers && data.markers.length > 0) {
               candleSeries.setMarkers(data.markers);
             } else {
               candleSeries.setMarkers([]);
             }
 
-            // Último precio tick
             const lastCandle = currentCandles[currentCandles.length - 1];
             const dec = pair.includes('JPY') ? 3 : 5;
             const curP = data.current_tick || lastCandle.close;
@@ -1611,7 +1620,7 @@
               tvChart.timeScale().fitContent();
             }
 
-            updateFiboLines(data.fibo);
+            updateZoneLines(data.fibo);
           }
         } catch (e) {
           console.error("Error cargando velas:", e);
@@ -1620,12 +1629,12 @@
         }
       }
 
-      function updateFiboLines(fibo) {
+      function updateZoneLines(fibo) {
         const hud = document.getElementById('fibo-hud-card');
+        const hudLabel = document.getElementById('hud-zone-label');
         const hud50 = document.getElementById('hud-fibo-50');
         const hud618 = document.getElementById('hud-fibo-618');
 
-        // Limpiar líneas anteriores
         if (fiboLine50 && candleSeries) {
           candleSeries.removePriceLine(fiboLine50);
           fiboLine50 = null;
@@ -1637,30 +1646,34 @@
 
         if (fibo && fibo.fibo_50 && fibo.fibo_618) {
           const dec = currentChartPair.includes('JPY') ? 3 : 5;
-          const p50 = parseFloat(fibo.fibo_50);
-          const p618 = parseFloat(fibo.fibo_618);
+          const p1 = parseFloat(fibo.fibo_50);
+          const p2 = parseFloat(fibo.fibo_618);
+
+          const isCall = currentActiveDirection === 'CALL';
+          const titleZone = isCall ? 'Zona Compras' : 'Zona Ventas';
 
           fiboLine50 = candleSeries.createPriceLine({
-            price: p50,
+            price: p1,
             color: '#00d2ff',
             lineWidth: 2,
             lineStyle: LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `Fibo 50% (${p50.toFixed(dec)})`
+            title: `Límite 1 (${p1.toFixed(dec)})`
           });
 
           fiboLine618 = candleSeries.createPriceLine({
-            price: p618,
+            price: p2,
             color: '#ffd700',
             lineWidth: 2,
             lineStyle: LightweightCharts.LineStyle.Solid,
             axisLabelVisible: true,
-            title: `Fibo 61.8% (${p618.toFixed(dec)})`
+            title: `Límite 2 (${p2.toFixed(dec)})`
           });
 
           if (hud) hud.style.display = 'flex';
-          if (hud50) hud50.textContent = `50%: ${p50.toFixed(dec)}`;
-          if (hud618) hud618.textContent = `61.8%: ${p618.toFixed(dec)}`;
+          if (hudLabel) hudLabel.textContent = isCall ? 'ZONA COMPRAS:' : 'ZONA VENTAS:';
+          if (hud50) hud50.textContent = p1.toFixed(dec);
+          if (hud618) hud618.textContent = p2.toFixed(dec);
         } else {
           if (hud) hud.style.display = 'none';
         }
@@ -1681,7 +1694,9 @@
               const cmd = parts[0];
               const p = parts[1];
               if (cmd === 'PREALERTA') {
-                statusTitleTextEl.textContent = `⚡ ¡SEÑAL CONFIRMADA EN ${p}! ESPERANDO RETROCESO FIBO 50%`;
+                const isBuy = parts[2] === 'CALL';
+                const zName = isBuy ? 'ZONA DE COMPRAS' : 'ZONA DE VENTAS';
+                statusTitleTextEl.textContent = `⚡ ¡SEÑAL CONFIRMADA EN ${p}! ESPERANDO RETROCESO A LA ${zName}`;
                 statusTagEl.className = 'status-tag-main status-confirming';
                 playPrealertChime();
                 if (p && p !== currentChartPair) {
@@ -1707,13 +1722,13 @@
       }
 
       function handleData(data) {
-        // Eventos directos del Radar Sniper
         if (data.type === 'sniper_radar') {
           if (data.event === 'PREALERTA') {
-            statusTitleTextEl.textContent = `⚡ ¡PRE-ALERTA RADAR EN ${data.pair}! PREPARAR ${data.direction}`;
+            const zName = data.direction === 'CALL' ? 'ZONA DE COMPRAS' : 'ZONA DE VENTAS';
+            statusTitleTextEl.textContent = `⚡ ¡PRE-ALERTA EN ${data.pair}! PREPARAR ENTRADA EN ${zName}`;
             statusTagEl.className = 'status-tag-main status-confirming';
             sigEventTypeBadge.className = 'badge-event-type status-confirming';
-            sigEventTypeBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> PREALERTA RADAR (${data.direction})`;
+            sigEventTypeBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> ${zName}`;
             playPrealertChime();
           } else if (data.event === 'GATILLO_EJECUTADO') {
             playAlertChime();
@@ -1801,7 +1816,6 @@
           return;
         }
 
-        // Determinar qué señal mostrar en el Hero Card
         let activeEvent = null;
         let eventCategory = 'SEARCHING';
 
@@ -1826,26 +1840,39 @@
           const pair = activeEvent.pair || 'EURUSD-OTC';
           const dec = pair.includes('JPY') ? 3 : 5;
           const dir = activeEvent.direction || 'CALL';
+          currentActiveDirection = dir;
+          const isCall = dir === 'CALL';
+
           const entryP = activeEvent.entry_price ? parseFloat(activeEvent.entry_price).toFixed(dec) : '--';
-          const fibo50 = activeEvent.fibo_50 ? parseFloat(activeEvent.fibo_50).toFixed(dec) : '--';
-          const fibo618 = activeEvent.fibo_618 ? parseFloat(activeEvent.fibo_618).toFixed(dec) : '--';
+          const p1 = activeEvent.fibo_50 ? parseFloat(activeEvent.fibo_50).toFixed(dec) : '--';
+          const p2 = activeEvent.fibo_618 ? parseFloat(activeEvent.fibo_618).toFixed(dec) : '--';
 
           sigPair.textContent = pair;
-          if (dir === 'CALL') {
+          if (isCall) {
             sigDirectionBadge.className = 'signal-direction-badge badge-call';
             sigDirectionText.textContent = 'COMPRA (CALL)';
             sigDirIcon.className = 'fa-solid fa-arrow-trend-up';
+            sigZoneTitle.textContent = 'Zona de Compras (CALL)';
+            sigZoneBadge.innerHTML = '<i class="fa-solid fa-bullseye" style="color: var(--iq-green);"></i> Rango de Entrada M5';
+            sigZoneLbl1.textContent = 'Límite Compra 1';
+            sigZoneLbl2.textContent = 'Límite Compra 2';
+            sigZoneTip.innerHTML = `<strong>Instrucción Operativa:</strong> Esperar a que la <strong>vela actual de M5</strong> retroceda y toque o ingrese dentro de la <strong>Zona de Compras</strong> (entre <code>${p1}</code> y <code>${p2}</code>) para <strong>comprar</strong>. La expiración es al <strong>cierre exacto de la vela de 5 minutos</strong>.`;
           } else {
             sigDirectionBadge.className = 'signal-direction-badge badge-put';
             sigDirectionText.textContent = 'VENTA (PUT)';
             sigDirIcon.className = 'fa-solid fa-arrow-trend-down';
+            sigZoneTitle.textContent = 'Zona de Ventas (PUT)';
+            sigZoneBadge.innerHTML = '<i class="fa-solid fa-bullseye" style="color: var(--iq-red);"></i> Rango de Entrada M5';
+            sigZoneLbl1.textContent = 'Límite Venta 1';
+            sigZoneLbl2.textContent = 'Límite Venta 2';
+            sigZoneTip.innerHTML = `<strong>Instrucción Operativa:</strong> Esperar a que la <strong>vela actual de M5</strong> retroceda y toque o ingrese dentro de la <strong>Zona de Ventas</strong> (entre <code>${p1}</code> y <code>${p2}</code>) para <strong>vender</strong>. La expiración es al <strong>cierre exacto de la vela de 5 minutos</strong>.`;
           }
 
           sigEntryTime.textContent = activeEvent.entry_time || 'Apertura Seg 00';
           sigExpireTime.textContent = activeEvent.expire_time || activeEvent.close_time || '5 Minutos (M5)';
           sigEntryPrice.textContent = entryP;
-          sigFibo50.textContent = fibo50;
-          sigFibo618.textContent = fibo618;
+          sigFibo50.textContent = p1;
+          sigFibo618.textContent = p2;
 
           const sigKey = `${pair}_${dir}_${activeEvent.time || activeEvent.entry_time}`;
           if ((eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK' || eventCategory === 'IN_TRADE') && sigKey !== lastPlayedSignalKey) {
@@ -1853,13 +1880,15 @@
             lastPlayedSignalKey = sigKey;
           }
 
+          const zoneWord = isCall ? 'ZONA DE COMPRAS' : 'ZONA DE VENTAS';
+
           if (eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK') {
-            statusTitleTextEl.textContent = `🎯 ¡SEÑAL CONFIRMADA EN ${pair}! ESPERANDO RETROCESO FIBO 50%`;
-            statusTagEl.textContent = 'ESPERANDO RETROCESO';
+            statusTitleTextEl.textContent = `🎯 ¡SEÑAL CONFIRMADA EN ${pair}! ESPERANDO ENTRADA EN ${zoneWord}`;
+            statusTagEl.textContent = 'ESPERANDO ZONA';
             statusTagEl.className = 'status-tag-main status-confirming';
             sigEventTypeBadge.className = 'badge-event-type status-confirming';
-            sigEventTypeBadge.innerHTML = '<i class="fa-solid fa-arrows-split-up-and-left"></i> RETROCESO FIBO 50%';
-            cdTitle.textContent = 'VENTANA RETROCESO';
+            sigEventTypeBadge.innerHTML = `<i class="fa-solid fa-crosshairs"></i> ${zoneWord}`;
+            cdTitle.textContent = 'VENTANA ENTRADA';
             radarSearchingStrip.style.display = 'none';
           } else if (eventCategory === 'IN_TRADE') {
             statusTitleTextEl.textContent = `OPERACIÓN ACTIVA (5M) EN ${pair}`;
@@ -1878,7 +1907,7 @@
           }
 
           if (activeEvent.fibo_50 && activeEvent.fibo_618) {
-            updateFiboLines({
+            updateZoneLines({
               fibo_50: activeEvent.fibo_50,
               fibo_618: activeEvent.fibo_618
             });
@@ -1903,7 +1932,6 @@
           statTotal.textContent = data.metrics.total_signals || 0;
         }
 
-        // Mantener feed en memoria si es necesario
         const feed = (data.live_signals_feed && data.live_signals_feed.length > 0) ? data.live_signals_feed : data.history;
         if (feed && feed.length > 0) {
           const lastTen = feed.slice(-10);

@@ -45,11 +45,16 @@ class TelegramNotifier:
 
     def notify_signal_m5_pullback(self, pair: str, direction: str, candle_time: str, signal_price: float,
                                   fibo_50: float, fibo_618: float, expire_time: str):
-        """Notificación inmediata al cierre de la vela M5 con niveles de retroceso Fibonacci (Alternativa A)."""
-        icon = "🟢 COMPRA / SUBE (CALL)" if direction in ("CALL", "COMPRA") else "🔴 VENTA / BAJA (PUT)"
-        dir_badge = "COMPRA" if direction in ("CALL", "COMPRA") else "VENTA"
-        dir_icon = "🟢" if direction in ("CALL", "COMPRA") else "🔴"
-        retracement_dir = "hacia abajo (descuento)" if direction in ("CALL", "COMPRA") else "hacia arriba (retesteo)"
+        """Notificación inmediata al cierre de la vela M5 con Zona de Compras o Ventas."""
+        is_call = direction in ("CALL", "COMPRA")
+        icon = "🟢 COMPRA / SUBE (CALL)" if is_call else "🔴 VENTA / BAJA (PUT)"
+        dir_icon = "🟢" if is_call else "🔴"
+        zone_title = "ZONA DE COMPRAS" if is_call else "ZONA DE VENTAS"
+        action_verb = "comprar" if is_call else "vender"
+
+        p_low = min(fibo_50, fibo_618)
+        p_high = max(fibo_50, fibo_618)
+
         msg = (
             f"🎯 <b>¡SEÑAL CONFIRMADA M5!</b> {dir_icon}\n\n"
             f"📊 <b>Par:</b> <code>{pair}</code>\n"
@@ -57,30 +62,31 @@ class TelegramNotifier:
             f"💵 <b>Precio Señal:</b> <code>{signal_price:.5f}</code>\n"
             f"🕐 <b>Hora Señal:</b> <code>{candle_time}</code>\n"
             f"⏱ <b>Expiración:</b> <code>{expire_time}</code> (Cierre de vela M5)\n\n"
-            f"📐 <b>ZONA DE RETROCESO FIBONACCI:</b>\n"
-            f"  🔹 <b>Fibo 50.0%:</b> <code>{fibo_50:.5f}</code>\n"
-            f"  🔹 <b>Fibo 61.8%:</b> <code>{fibo_618:.5f}</code>\n\n"
-            f"💡 <i>Estrategia: Esperar retroceso {retracement_dir} a la zona 50% - 61.8% para entrar con ventaja.</i>\n"
-            f"🤖 <i>El bot ejecutará en automático al tocar la zona de retroceso.</i>\n\n"
-            f"📢 <b>Trader 4 Less</b> | @traderfxapp"
+            f"🎯 <b>{zone_title}:</b>\n"
+            f"  🔹 <b>Límite 1:</b> <code>{p_low:.5f}</code>\n"
+            f"  🔹 <b>Límite 2:</b> <code>{p_high:.5f}</code>\n\n"
+            f"💡 <i>Instrucción: Esperar a que la vela actual de M5 retroceda y toque o ingrese dentro de esta zona para {action_verb}.</i>\n"
+            f"🤖 <i>El bot ejecutará en automático al tocar o entrar a la zona.</i>\n\n"
+            f"📢 <b>Trading SNR</b> | @traderfxapp"
         )
         return self.send_message(msg)
 
     def notify_pullback_entry(self, pair: str, direction: str, entry_time: str, entry_price: float,
                               fibo_level: float, expire_time: str, amount: float = 0.0, fuerza_detalle: str = ""):
-        """Notificación cuando el precio toca el retroceso Fibonacci y se dispara la orden."""
+        """Notificación cuando el precio entra a la zona y se dispara la orden."""
         icon = "🟢 COMPRA (CALL)" if direction in ("CALL", "COMPRA") else "🔴 VENTA (PUT)"
+        zone_name = "Zona de Compras" if direction in ("CALL", "COMPRA") else "Zona de Ventas"
         fuerza_line = f"💪 <b>Fuerza de Rechazo:</b> <code>{fuerza_detalle}</code>\n" if fuerza_detalle else ""
         msg = (
-            f"⚡ <b>¡ORDEN EJECUTADA EN RETROCESO!</b> ⚡\n\n"
+            f"⚡ <b>¡ORDEN EJECUTADA EN {zone_name.upper()}!</b> ⚡\n\n"
             f"📊 <b>Par:</b> <code>{pair}</code>\n"
             f"🚀 <b>Acción:</b> <b>{icon}</b>\n"
             f"🎯 <b>Precio Entrada:</b> <code>{entry_price:.5f}</code>\n"
-            f"📐 <b>Nivel Fibo Rebotado:</b> <code>{fibo_level:.5f}</code>\n"
+            f"📐 <b>Nivel Rebotado:</b> <code>{fibo_level:.5f}</code>\n"
             f"{fuerza_line}"
             f"⏱ <b>Expiración:</b> 🏁 <code>{expire_time}</code> (Fin vela M5)\n"
             f"💰 <b>Importe:</b> <code>${amount:.2f}</code> (Flat sin martingala)\n\n"
-            f"📢 <b>Trader 4 Less</b> | @traderfxapp"
+            f"📢 <b>Trading SNR</b> | @traderfxapp"
         )
         return self.send_message(msg)
 
@@ -159,16 +165,20 @@ class TelegramNotifier:
 
     def notify_entry(self, pair: str, direction: str, entry_time: str, entry_price: float, expiration: int = 5, amount: float = 0.0,
                      fibo_50: float = None, fibo_618: float = None, expire_time: str = None):
-        """Notificación en el segundo 00 al ejecutar la operación confirmada con niveles de retroceso Fibo"""
-        icon = "🟢 COMPRA (CALL)" if direction == "CALL" else "🔴 VENTA (PUT)"
+        """Notificación en el segundo 00 al ejecutar la operación confirmada con zona de compras o ventas"""
+        is_call = direction in ("CALL", "COMPRA")
+        icon = "🟢 COMPRA (CALL)" if is_call else "🔴 VENTA (PUT)"
+        zone_name = "ZONA DE COMPRAS" if is_call else "ZONA DE VENTAS"
 
-        fibo_section = ""
+        zone_section = ""
         if fibo_50 is not None and fibo_618 is not None:
-            fibo_section = (
-                f"\n🎯 <b>ZONA DE RETROCESO FIBONACCI (Sniper Entry):</b>\n"
-                f"• Fibo 50.0%: <code>{fibo_50:.5f}</code>\n"
-                f"• Fibo 61.8%: <code>{fibo_618:.5f}</code>\n"
-                f"💡 <i>Tip Pro: Esperar retroceso a la zona 50% - 61.8% para entrar con mejor precio y ventaja.</i>\n"
+            p_low = min(fibo_50, fibo_618)
+            p_high = max(fibo_50, fibo_618)
+            zone_section = (
+                f"\n🎯 <b>{zone_name}:</b>\n"
+                f"• Límite 1: <code>{p_low:.5f}</code>\n"
+                f"• Límite 2: <code>{p_high:.5f}</code>\n"
+                f"💡 <i>Instrucción: Esperar retroceso de la vela actual M5 dentro de la zona de compras/ventas.</i>\n"
             )
 
         exp_line = f"<b>{expiration} Minutos (M5)</b>"
@@ -183,9 +193,9 @@ class TelegramNotifier:
             f"⏳ <b>Expiración:</b> {exp_line}\n"
             f"💵 <b>Precio Apertura:</b> <code>{entry_price:.5f}</code>\n"
             f"💰 <b>Importe Fijo:</b> <code>${amount:.2f}</code> (Sin Martingala)\n"
-            f"{fibo_section}\n"
+            f"{zone_section}\n"
             f"⚠️ <b>Regla de Oro:</b> La expiración SIEMPRE es al término de la vela de 5M (<code>{expire_time or 'al cierre de vela'}</code>).\n\n"
-            f"🤖 <b>Trader 4 Less</b> | @traderfxapp"
+            f"🤖 <b>Trading SNR</b> | @traderfxapp"
         )
         return self.send_message(msg)
 

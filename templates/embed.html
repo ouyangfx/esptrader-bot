@@ -266,8 +266,8 @@
       </div>
 
       <div class="sig-fibo-levels">
-        <div class="fibo-box">Fibo 50%: <span id="sig-f50">--</span></div>
-        <div class="fibo-box">Fibo 61.8%: <span id="sig-f618">--</span></div>
+        <div class="fibo-box">Límite 1: <span id="sig-f50">--</span></div>
+        <div class="fibo-box">Límite 2: <span id="sig-f618">--</span></div>
       </div>
     </div>
 
@@ -421,7 +421,7 @@
           lineWidth: 2,
           lineStyle: LightweightCharts.LineStyle.Dashed,
           axisLabelVisible: true,
-          title: 'FIBO 50%'
+          title: 'Límite 1'
         });
         fiboLine618 = candleSeries.createPriceLine({
           price: p618,
@@ -429,7 +429,7 @@
           lineWidth: 2,
           lineStyle: LightweightCharts.LineStyle.Solid,
           axisLabelVisible: true,
-          title: 'FIBO 61.8%'
+          title: 'Límite 2'
         });
       }
     }
@@ -529,8 +529,9 @@
           action.innerHTML = '<i class="fa-solid fa-arrow-trend-down"></i> VENTA';
         }
 
+        const zName = dir === 'CALL' ? 'Zona de Compras' : 'Zona de Ventas';
         if (mode === 'WAITING_PULLBACK' || mode === 'CONFIRMING') {
-          stateMsg.textContent = `⚡ Señal confirmada • Esperando retroceso 50%`;
+          stateMsg.textContent = `⚡ Señal confirmada • Esperando retroceso a la ${zName}`;
         } else if (mode === 'IN_TRADE') {
           stateMsg.textContent = `🎯 Operación activa (M5) • Expira en término de vela`;
         } else {

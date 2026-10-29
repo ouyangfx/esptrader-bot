@@ -794,27 +794,28 @@ class TradingEngine:
                             "confluence_info": conf_reason
                         }
 
+                        zone_name = "Zona de Compras" if direction in ("CALL", "COMPRA") else "Zona de Ventas"
                         sig_event = {
                             "id": int(time.time()),
                             "time": time_str,
                             "pair": pair,
                             "direction": direction,
                             "type": "SEÑAL_M5",
-                            "status": "ESPERANDO RETROCESO FIBO 50% - 61.8%",
-                            "entry_time": "Al tocar retroceso Fibo",
+                            "status": f"ESPERANDO ENTRADA EN {zone_name.upper()}",
+                            "entry_time": f"Al retroceder a {zone_name}",
                             "expire_time": expire_time_str,
                             "entry_price": s_close,
                             "fibo_50": round(init_fibo_50, 5),
                             "fibo_618": round(init_fibo_618, 5),
-                            "tip": f"Esperar retroceso a zona Fibo 50% ({init_fibo_50:.5f}) - 61.8% ({init_fibo_618:.5f}) para entrada óptima.",
+                            "tip": f"Esperar que la vela actual de M5 retroceda a la {zone_name} entre {min(init_fibo_50, init_fibo_618):.5f} y {max(init_fibo_50, init_fibo_618):.5f}.",
                             "confluence": conf_reason
                         }
                         self.last_signal_event = sig_event
                         self.live_signals_feed.append(sig_event)
                         self.live_signals_feed = self.live_signals_feed[-10:]
 
-                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando retroceso Fibo 50% ({init_fibo_50:.5f}) (Demás pares en pausa)..."
-                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA M5! {pair} {direction}. Esperando retroceso Fibo 50%: {init_fibo_50:.5f} (Demás pares bloqueados)")
+                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando retroceso a la {zone_name} (Demás pares en pausa)..."
+                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA M5! {pair} {direction}. Esperando entrada en {zone_name} (Demás pares bloqueados)")
                         
                         # Notificación inmediata a Telegram (Alternativa A)
                         self.telegram.notify_signal_m5_pullback(
@@ -845,9 +846,10 @@ class TradingEngine:
             fibo_618 = self.pending_signal.get("fibo_618", 0.0)
 
             time_left_to_wait = max(0, max_wait - elapsed)
+            z_title = "ZONA COMPRAS" if direction in ("CALL", "COMPRA") else "ZONA VENTAS"
             self.current_status_message = (
-                f"[{time_str}] ESPERANDO RETROCESO {direction} EN {pair}: "
-                f"Precio: {current_price:.5f} | Fibo: {fibo_50:.5f} ({time_left_to_wait}s | Demás pares en pausa)"
+                f"[{time_str}] ESPERANDO {z_title} EN {pair}: "
+                f"Precio: {current_price:.5f} | Zona: {min(fibo_50, fibo_618):.5f} - {max(fibo_50, fibo_618):.5f} ({time_left_to_wait}s | Demás pares en pausa)"
             )
 
             # Monitorear tick
@@ -867,7 +869,7 @@ class TradingEngine:
                 self.telegram.notify_pullback_cancelled(
                     pair=pair,
                     direction=direction,
-                    reason=f"El precio no retrocedió a la zona Fibo 50% ({fibo_50:.5f}) dentro de los primeros {max_wait}s."
+                    reason=f"La vela de M5 no retrocedió a la {z_title} dentro de la ventana operativa."
                 )
                 self.engine_mode = "SEARCHING"
                 self.locked_pair = None

@@ -416,41 +416,29 @@ class TradingEngine:
         return es_favorable, round(ratio_favor, 2), detalle
 
     async def _evaluar_pullback_tick(self, pair: str, current_price: float, server_ts: float):
-        """Evalúa si el precio en vivo toca la zona de retroceso Fibonacci con fuerza a favor."""
-        if not self.pending_signal or self.engine_mode not in ("CONFIRMING", "WAITING_PULLBACK"):
+        """Evalúa si el precio en vivo toca la zona de compras o ventas para disparar la Entrada 2."""
+        if not self.current_trade or not self.current_trade.get("pullback_waiting"):
+            return
+        if self.locked_pair != pair:
             return
 
-        direction = self.pending_signal["direction"]
-        fibo_50 = float(self.pending_signal.get("fibo_50", 0.0))
-        fibo_618 = float(self.pending_signal.get("fibo_618", 0.0))
+        direction = self.current_trade["direction"]
+        fibo_50 = float(self.current_trade.get("fibo_50", 0.0))
+        fibo_618 = float(self.current_trade.get("fibo_618", 0.0))
         pip_unit = 0.01 if "JPY" in pair else 0.0001
         tolerance = pip_unit * 1.0  # 1 pip de tolerancia
 
-        # 1. Filtro Anti-Cuchillo Cayendo: Si perfora violentamente más de 2.5 pips el 61.8%
+        # 1. Filtro Anti-Cuchillo Cayendo: Si perfora violentamente más de 2.5 pips el límite profundo
         if direction in ("CALL", "COMPRA") and current_price < (fibo_618 - (pip_unit * 2.5)):
-            logger.info(f"🚫 [FILTRO FUERZA] {pair} perforó el 61.8% ({fibo_618:.5f}). Fuerza en contra detectada. Cancelando señal.")
-            self.telegram.notify_pullback_cancelled(
-                pair=pair,
-                direction=direction,
-                reason=f"Fuerza en contra detectada: perforación del Fibo 61.8% ({fibo_618:.5f})."
-            )
-            self.engine_mode = "SEARCHING"
-            self.locked_pair = None
-            self.pending_signal = None
+            logger.info(f"🚫 [FILTRO FUERZA] {pair} perforó límite profundo ({fibo_618:.5f}). Fuerza en contra detectada. Cancelando Entrada 2.")
+            self.current_trade["pullback_waiting"] = False
             return
         elif direction in ("PUT", "VENTA") and current_price > (fibo_618 + (pip_unit * 2.5)):
-            logger.info(f"🚫 [FILTRO FUERZA] {pair} perforó el 61.8% ({fibo_618:.5f}). Fuerza en contra detectada. Cancelando señal.")
-            self.telegram.notify_pullback_cancelled(
-                pair=pair,
-                direction=direction,
-                reason=f"Fuerza en contra detectada: perforación del Fibo 61.8% ({fibo_618:.5f})."
-            )
-            self.engine_mode = "SEARCHING"
-            self.locked_pair = None
-            self.pending_signal = None
+            logger.info(f"🚫 [FILTRO FUERZA] {pair} perforó límite profundo ({fibo_618:.5f}). Fuerza en contra detectada. Cancelando Entrada 2.")
+            self.current_trade["pullback_waiting"] = False
             return
 
-        # 2. Verificar si está en la zona de retroceso Fibonacci (50% a 61.8%)
+        # 2. Verificar si está en la zona de compras o ventas
         pullback_hit = False
         if direction in ("CALL", "COMPRA") and current_price <= (fibo_50 + tolerance):
             pullback_hit = True
@@ -464,61 +452,52 @@ class TradingEngine:
                 # El precio llegó al nivel pero el micro-flujo sigue empujando en contra; esperar absorción
                 return
 
-            trade_amount = self.current_amount
-            remaining_sec = max(60, self.pending_signal["end_ts"] - server_ts)
-            exp_min = max(1, min(5, int(round(remaining_sec / 60.0))))
+            remaining_sec = max(0, self.current_trade["end_ts"] - server_ts)
+            if remaining_sec < 60:
+                self.current_trade["pullback_waiting"] = False
+                return
 
+            exp_min = max(1, min(5, int(round(remaining_sec / 60.0))))
+            entry_amount = self.current_trade["entry_1"]["amount"]
             entry_time_str = datetime.fromtimestamp(server_ts).strftime("%H:%M:%S")
-            expire_ts = self.pending_signal["end_ts"]
-            expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
+            expire_time_str = self.current_trade.get("expire_time", "")
+
+            # Desactivar bandera para evitar disparos duplicados
+            self.current_trade["pullback_waiting"] = False
 
             logger.info(
-                f"🎯 ¡RETROCESO FIBONACCI VALIDADO CON FUERZA! {pair} {direction} @ {current_price:.5f} "
+                f"🎯 ¡ENTRADA 2 ACTIVADA EN RETROCESO! {pair} {direction} @ {current_price:.5f} "
                 f"({detalle_fuerza}) - Ejecutando a {exp_min}m M5"
             )
 
-            # Prevenir ejecuciones múltiples simultáneas
-            self.engine_mode = "IN_TRADE"
             ok, order_id, msg = await asyncio.to_thread(
-                self.iq.buy_option, pair, trade_amount, direction, exp_min
+                self.iq.buy_option, pair, entry_amount, direction, exp_min
             )
 
             if ok:
-                self.current_trade = {
+                self.current_trade["entry_2"] = {
                     "id": order_id,
                     "pair": pair,
                     "direction": direction,
                     "entry_time": entry_time_str,
                     "entry_price": current_price,
-                    "fibo_50": fibo_50,
-                    "fibo_618": fibo_618,
-                    "amount": trade_amount,
+                    "amount": entry_amount,
                     "expiration": exp_min,
-                    "start_ts": server_ts,
-                    "end_ts": expire_ts
+                    "status": "EJECUTADA",
+                    "fuerza": detalle_fuerza
                 }
-                self.current_status_message = f"OPERACIÓN EN RETROCESO ({detalle_fuerza}): {pair} {direction} ${trade_amount} (Exp: {expire_time_str})"
+                zone_name = self.current_trade.get("zone_name", "Zona de Entrada")
+                self.current_status_message = (
+                    f"⚡ ENTRADA 2 EN RETROCESO ({detalle_fuerza}): {pair} {direction} ${entry_amount} (Exp: {expire_time_str})"
+                )
 
-                sig_event = {
-                    "id": order_id,
-                    "time": entry_time_str,
-                    "pair": pair,
-                    "direction": direction,
-                    "type": "ENTRADA_RETROCESO",
-                    "status": "OPERACIÓN EN CURSO (RETROCESO M5)",
-                    "entry_time": entry_time_str,
-                    "expire_time": expire_time_str,
-                    "entry_price": current_price,
-                    "fibo_50": fibo_50,
-                    "fibo_618": fibo_618,
-                    "tip": f"Rechazo Fibo 50% confirmado con {detalle_fuerza}",
-                    "amount": trade_amount
-                }
-                self.last_signal_event = sig_event
-                self.live_signals_feed.append(sig_event)
-                self.live_signals_feed = self.live_signals_feed[-10:]
+                if self.last_signal_event:
+                    self.last_signal_event["entry_2_status"] = f"EJECUTADA @ {current_price:.5f}"
+                    self.last_signal_event["entry_2_price"] = current_price
+                    self.last_signal_event["entry_2_time"] = entry_time_str
+                    self.last_signal_event["status"] = "2 ENTRADAS ACTIVAS (APERTURA + RETROCESO)"
 
-                # Notificar a Telegram con métrica de fuerza
+                # Notificar a Telegram
                 self.telegram.notify_pullback_entry(
                     pair=pair,
                     direction=direction,
@@ -526,20 +505,16 @@ class TradingEngine:
                     entry_price=current_price,
                     fibo_level=fibo_50,
                     expire_time=expire_time_str,
-                    amount=trade_amount,
+                    amount=entry_amount,
                     fuerza_detalle=detalle_fuerza
                 )
 
                 # Notificar a Web vía WebSocket
                 cmd = "COMPRA" if direction in ("CALL", "COMPRA") else "VENTA"
                 await self.broadcast_custom_text(f"{cmd}|{pair}")
-                logger.info(f"Orden en retroceso colocada exitosamente en {pair} {direction} (ID: {order_id})")
+                logger.info(f"Entrada 2 en retroceso colocada exitosamente en {pair} {direction} (ID: {order_id})")
             else:
-                logger.warning(f"Error al enviar orden en retroceso a IQ Option ({pair}): {msg}")
-                self.engine_mode = "SEARCHING"
-                self.locked_pair = None
-                self.pending_signal = None
-                self.pending_signal = None
+                logger.warning(f"Error al enviar Entrada 2 en retroceso a IQ Option ({pair}): {msg}")
 
     async def _ejecutar_gatillo_sniper(self, gatillo: Dict[str, Any]):
         """Ejecuta inmediatamente la orden sniper adelantada (Intra-bar M5)."""
@@ -663,11 +638,9 @@ class TradingEngine:
                         if pair == self.active_pair:
                             self.current_tick_price = p_state["tick_price"]
 
-                        # Evaluación en tiempo real del Retroceso Fibonacci M5 (Alternativa A)
-                        if self.engine_mode in ("CONFIRMING", "WAITING_PULLBACK") and pair == self.locked_pair and p_state["tick_price"] > 0:
+                        # Evaluación en tiempo real de Entrada 2 (Retroceso en Zona)
+                        if self.engine_mode == "IN_TRADE" and self.current_trade and self.current_trade.get("pullback_waiting") and pair == self.locked_pair and p_state["tick_price"] > 0:
                             await self._evaluar_pullback_tick(pair, p_state["tick_price"], server_ts)
-                            if self.engine_mode == "IN_TRADE":
-                                break
 
                     self.seconds_left_in_candle = self.timeframe - (current_int_sec % self.timeframe)
                     if self.seconds_left_in_candle == self.timeframe:
@@ -756,7 +729,7 @@ class TradingEngine:
 
                         candle_dt_str = datetime.fromtimestamp(closed_candle_time).strftime("%H:%M:%S")
 
-                        # Cálculo de Fibonacci en la vela de señal recién cerrada (Alternativa A)
+                        # Cálculo de Zona de Compras / Ventas en la vela de señal recién cerrada
                         s_min = float(closed_candle.get('min', closed_candle.get('low', closed_candle['close'])))
                         s_max = float(closed_candle.get('max', closed_candle.get('high', closed_candle['close'])))
                         s_close = float(closed_candle['close'])
@@ -773,11 +746,53 @@ class TradingEngine:
                         current_m5_end = ((server_ts // 300) + 1) * 300
                         expire_time_str = datetime.fromtimestamp(current_m5_end).strftime("%H:%M:%S")
 
-                        # ¡BLOQUEAR MOTOR EN ESTE PAR PARA RETROCESO! (Alternativa A)
+                        # DIVISIÓN EN DOS ENTRADAS: Cada entrada toma el 50% del monto base (mínimo $1.00)
+                        single_entry_amount = max(1.0, round(self.base_amount / 2.0, 2)) if self.base_amount >= 2.0 else 1.0
+
+                        # 1️⃣ EJECUTAR ENTRADA 1 INMEDIATAMENTE EN APERTURA DE LA VELA M5
                         self.locked_pair = pair
                         self.active_pair = pair
-                        self.engine_mode = "WAITING_PULLBACK"
-                        
+                        self.engine_mode = "IN_TRADE"
+
+                        logger.info(f"🚀 [ENTRADA 1] Ejecutando Apertura en {pair} {direction} ${single_entry_amount} @ {s_close:.5f}")
+                        ok1, order_id_1, msg1 = await asyncio.to_thread(
+                            self.iq.buy_option, pair, single_entry_amount, direction, 5
+                        )
+
+                        if not ok1:
+                            logger.error(f"Error al ejecutar Entrada 1 en IQ Option ({pair}): {msg1}")
+                            self.engine_mode = "SEARCHING"
+                            self.locked_pair = None
+                            continue
+
+                        zone_name = "Zona de Compras" if direction in ("CALL", "COMPRA") else "Zona de Ventas"
+                        p_low = min(init_fibo_50, init_fibo_618)
+                        p_high = max(init_fibo_50, init_fibo_618)
+
+                        self.current_trade = {
+                            "pair": pair,
+                            "direction": direction,
+                            "start_ts": server_ts,
+                            "end_ts": current_m5_end,
+                            "expire_time": expire_time_str,
+                            "fibo_50": round(init_fibo_50, 5),
+                            "fibo_618": round(init_fibo_618, 5),
+                            "zone_name": zone_name,
+                            "entry_price": s_close,
+                            "amount": single_entry_amount * 2,
+                            "entry_1": {
+                                "id": order_id_1,
+                                "time": time_str,
+                                "price": s_close,
+                                "amount": single_entry_amount,
+                                "status": "EJECUTADA"
+                            },
+                            "entry_2": None,
+                            "pullback_waiting": True,
+                            "pullback_max_seconds": 180,
+                            "confluence_info": conf_reason
+                        }
+
                         self.pending_signal = {
                             "pair": pair,
                             "direction": direction,
@@ -791,33 +806,40 @@ class TradingEngine:
                             "start_ts": server_ts,
                             "end_ts": current_m5_end,
                             "max_wait_seconds": 180,
-                            "confluence_info": conf_reason
+                            "confluence_info": conf_reason,
+                            "entry_1_price": s_close,
+                            "entry_1_amount": single_entry_amount
                         }
 
-                        zone_name = "Zona de Compras" if direction in ("CALL", "COMPRA") else "Zona de Ventas"
                         sig_event = {
-                            "id": int(time.time()),
+                            "id": order_id_1,
                             "time": time_str,
                             "pair": pair,
                             "direction": direction,
-                            "type": "SEÑAL_M5",
-                            "status": f"ESPERANDO ENTRADA EN {zone_name.upper()}",
-                            "entry_time": f"Al retroceder a {zone_name}",
+                            "type": "SEÑAL_2_ENTRADAS",
+                            "status": f"E1 APERTURA EJECUTADA | ESPERANDO E2 EN {zone_name.upper()}",
+                            "entry_time": time_str,
                             "expire_time": expire_time_str,
                             "entry_price": s_close,
+                            "entry_1_price": s_close,
+                            "entry_1_amount": single_entry_amount,
+                            "entry_2_status": f"Esperando retroceso en {zone_name}",
                             "fibo_50": round(init_fibo_50, 5),
                             "fibo_618": round(init_fibo_618, 5),
-                            "tip": f"Esperar que la vela actual de M5 retroceda a la {zone_name} entre {min(init_fibo_50, init_fibo_618):.5f} y {max(init_fibo_50, init_fibo_618):.5f}.",
+                            "tip": f"Entrada 1 en apertura ({s_close:.5f}). Entrada 2 esperando retroceso a {zone_name} ({p_low:.5f} - {p_high:.5f}).",
                             "confluence": conf_reason
                         }
                         self.last_signal_event = sig_event
                         self.live_signals_feed.append(sig_event)
                         self.live_signals_feed = self.live_signals_feed[-10:]
 
-                        self.current_status_message = f"¡SEÑAL {direction} EN {pair}! Esperando retroceso a la {zone_name} (Demás pares en pausa)..."
-                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA M5! {pair} {direction}. Esperando entrada en {zone_name} (Demás pares bloqueados)")
+                        self.current_status_message = (
+                            f"🎯 ¡SEÑAL CONFIRMADA! E1 Apertura ejecutada en {pair} {direction} (${single_entry_amount}) | "
+                            f"Esperando retroceso para E2 en {zone_name}..."
+                        )
+                        logger.info(f"🎯 ¡SEÑAL CONFIRMADA (2 ENTRADAS)! {pair} {direction}. E1 colocada. Esperando E2 en {zone_name}")
                         
-                        # Notificación inmediata a Telegram (Alternativa A)
+                        # Notificación inmediata a Telegram
                         self.telegram.notify_signal_m5_pullback(
                             pair=pair,
                             direction=direction,
@@ -825,77 +847,47 @@ class TradingEngine:
                             signal_price=s_close,
                             fibo_50=round(init_fibo_50, 5),
                             fibo_618=round(init_fibo_618, 5),
-                            expire_time=expire_time_str
+                            expire_time=expire_time_str,
+                            entry_amount=single_entry_amount
                         )
                         
                         # Notificación a Web vía WebSocket
-                        await self.broadcast_custom_text(f"PREALERTA|{pair}|{direction}")
+                        cmd = "COMPRA" if direction in ("CALL", "COMPRA") else "VENTA"
+                        await self.broadcast_custom_text(f"{cmd}|{pair}")
                         break
 
         # =========================================================
-        # FASE 2: WAITING_PULLBACK (Monitorea retroceso del par bloqueado)
-        # =========================================================
-        elif self.engine_mode in ("CONFIRMING", "WAITING_PULLBACK"):
-            pair = self.locked_pair
-            direction = self.pending_signal["direction"]
-            p_state = self.pairs_state.get(pair, {})
-            current_price = p_state.get("tick_price", 0.0)
-            elapsed = server_ts - self.pending_signal.get("start_ts", server_ts)
-            max_wait = self.pending_signal.get("max_wait_seconds", 180)
-            fibo_50 = self.pending_signal.get("fibo_50", 0.0)
-            fibo_618 = self.pending_signal.get("fibo_618", 0.0)
-
-            time_left_to_wait = max(0, max_wait - elapsed)
-            z_title = "ZONA COMPRAS" if direction in ("CALL", "COMPRA") else "ZONA VENTAS"
-            self.current_status_message = (
-                f"[{time_str}] ESPERANDO {z_title} EN {pair}: "
-                f"Precio: {current_price:.5f} | Zona: {min(fibo_50, fibo_618):.5f} - {max(fibo_50, fibo_618):.5f} ({time_left_to_wait}s | Demás pares en pausa)"
-            )
-
-            # Monitorear tick
-            if current_price > 0:
-                await self._evaluar_pullback_tick(pair, current_price, server_ts)
-
-            if self.engine_mode == "IN_TRADE":
-                return
-
-            # Si transcurrieron más de 180s o quedan menos de 90s para el cierre de vela M5
-            seconds_left_in_m5 = max(0, self.pending_signal.get("end_ts", server_ts) - server_ts)
-            if elapsed >= max_wait or seconds_left_in_m5 <= 90:
-                logger.info(
-                    f"Tiempo de retroceso agotado ({elapsed}s transcurridos, quedan {seconds_left_in_m5}s en M5) "
-                    f"para {pair} {direction}. Cancelando entrada para proteger capital."
-                )
-                self.telegram.notify_pullback_cancelled(
-                    pair=pair,
-                    direction=direction,
-                    reason=f"La vela de M5 no retrocedió a la {z_title} dentro de la ventana operativa."
-                )
-                self.engine_mode = "SEARCHING"
-                self.locked_pair = None
-                self.pending_signal = None
-
-        # =========================================================
-        # FASE 3: IN_TRADE (Exclusivo: espera hasta el cierre exacto)
+        # FASE 2: IN_TRADE (Monitorea las 2 entradas y espera el cierre exacto de vela M5)
         # =========================================================
         elif self.engine_mode == "IN_TRADE":
             pair = self.locked_pair
             cur_trade = self.current_trade
+            if not cur_trade:
+                self.engine_mode = "SEARCHING"
+                self.locked_pair = None
+                return
+
             remaining = cur_trade["end_ts"] - server_ts
             trade_dir = cur_trade["direction"]
 
+            # Si aún está esperando retroceso para Entrada 2, evaluar ventana de tiempo
+            if cur_trade.get("pullback_waiting"):
+                elapsed = server_ts - cur_trade.get("start_ts", server_ts)
+                max_wait = cur_trade.get("pullback_max_seconds", 180)
+                if elapsed >= max_wait or remaining <= 75:
+                    cur_trade["pullback_waiting"] = False
+                    logger.info(f"Ventana de Entrada 2 (Retroceso) finalizada sin activación en {pair} ({elapsed}s transcurridos). Entrada 1 continúa activa.")
+
+            # Estado para el panel
+            e2_txt = " | E2 Retroceso: " + ("Ejecutada" if cur_trade.get("entry_2") else ("Esperando..." if cur_trade.get("pullback_waiting") else "No activada"))
             self.current_status_message = (
-                f"[{time_str}] OPERACIÓN EN CURSO (1 A LA VEZ): {pair} {trade_dir} ${cur_trade['amount']} - "
+                f"[{time_str}] OPERACIÓN EN CURSO (1 A LA VEZ): {pair} {trade_dir} (E1 Apertura: Activa{e2_txt}) - "
                 f"Cierre en: {max(0, remaining)}s (Demás pares en pausa)"
             )
 
             if remaining <= 0:
-                self.current_status_message = f"[{time_str}] Verificando resultado de {pair} con el broker..."
+                self.current_status_message = f"[{time_str}] Verificando resultado de {pair} (2 entradas) con el broker..."
                 await asyncio.sleep(1.5)
-
-                order_id = cur_trade["id"]
-                trade_amount = cur_trade["amount"]
-                entry_price = cur_trade["entry_price"]
 
                 # 1. Obtener velas recientes para determinar el precio de cierre exacto
                 fresh_candles = await asyncio.to_thread(self.iq.get_candles, pair, self.timeframe, 5)
@@ -909,117 +901,201 @@ class TradingEngine:
                     close_price = fresh_candles[-1].get('close')
 
                 if close_price is None or close_price <= 0:
-                    close_price = self.current_tick_price if self.current_tick_price else entry_price
+                    close_price = self.current_tick_price if self.current_tick_price else cur_trade["entry_1"]["price"]
 
-                # 2. Consultar al broker vía websocket
-                result, profit, _, _ = await asyncio.to_thread(self.iq.check_result, order_id)
                 close_time_str = datetime.fromtimestamp(self.iq.get_server_timestamp()).strftime("%H:%M:%S")
 
-                # 3. Fallback matemático preciso si el broker no devolvió un resultado concluyente
-                if result not in ("WIN", "LOSS", "EQUAL"):
-                    logger.info(f"Liquidando resultado matemático para {pair} {trade_dir} (Entrada: {entry_price}, Cierre: {close_price})")
-                    diff = close_price - entry_price
-                    if abs(diff) < 1e-6:
-                        result = "EQUAL"
-                        profit = 0.0
-                    elif trade_dir == "CALL":
-                        if diff > 0:
-                            result = "WIN"
-                            profit = round(trade_amount * 0.85, 2)
-                        else:
-                            result = "LOSS"
-                            profit = round(-trade_amount, 2)
-                    elif trade_dir == "PUT":
-                        if diff < 0:
-                            result = "WIN"
-                            profit = round(trade_amount * 0.85, 2)
-                        else:
-                            result = "LOSS"
-                            profit = round(-trade_amount, 2)
+                # =====================================================
+                # 2. EVALUAR ENTRADA 1 (APERTURA)
+                # =====================================================
+                entry_1 = cur_trade["entry_1"]
+                p1 = entry_1["price"]
+                amt1 = entry_1["amount"]
+                id1 = entry_1["id"]
+
+                res1, prof1, _, _ = await asyncio.to_thread(self.iq.check_result, id1)
+                if res1 not in ("WIN", "LOSS", "EQUAL"):
+                    diff1 = close_price - p1
+                    if abs(diff1) < 1e-6:
+                        res1 = "EQUAL"
+                        prof1 = 0.0
+                    elif trade_dir in ("CALL", "COMPRA"):
+                        res1 = "WIN" if diff1 > 0 else "LOSS"
+                        prof1 = round(amt1 * 0.85, 2) if diff1 > 0 else round(-amt1, 2)
+                    else:
+                        res1 = "WIN" if diff1 < 0 else "LOSS"
+                        prof1 = round(amt1 * 0.85, 2) if diff1 < 0 else round(-amt1, 2)
                 else:
-                    # Garantizar coherencia en los importes de profit
-                    if result == "WIN" and profit <= 0:
-                        profit = round(trade_amount * 0.85, 2)
-                    elif result == "LOSS" and profit >= 0:
-                        profit = round(-trade_amount, 2)
-                    elif result == "EQUAL":
-                        profit = 0.0
+                    if res1 == "WIN" and prof1 <= 0:
+                        prof1 = round(amt1 * 0.85, 2)
+                    elif res1 == "LOSS" and prof1 >= 0:
+                        prof1 = round(-amt1, 2)
+                    elif res1 == "EQUAL":
+                        prof1 = 0.0
 
-                # 4. Actualización rigurosa de estadísticas de sesión
-                if result == "WIN":
-                    self.session_stats["wins"] += 1
-                    self.session_stats["net_profit"] += profit
-                elif result == "LOSS":
-                    self.session_stats["losses"] += 1
-                    self.session_stats["net_profit"] += profit
+                entry_1["result"] = res1
+                entry_1["profit"] = prof1
+
+                # Guardar en DB Entrada 1
+                t1_record = {
+                    "id": id1,
+                    "pair": pair,
+                    "direction": trade_dir,
+                    "result": res1,
+                    "profit": round(prof1, 2),
+                    "entry_time": entry_1["time"],
+                    "close_time": close_time_str,
+                    "entry_price": p1,
+                    "close_price": close_price,
+                    "amount": amt1,
+                    "martingale_step": 0
+                }
+                self.db.save_trade(t1_record)
+                self.trade_history.append(t1_record)
+
+                # =====================================================
+                # 3. EVALUAR ENTRADA 2 (RETROCESO - SI FUE EJECUTADA)
+                # =====================================================
+                entry_2 = cur_trade.get("entry_2")
+                has_e2 = entry_2 is not None and entry_2.get("price", 0.0) > 0
+
+                if has_e2:
+                    p2 = entry_2["price"]
+                    amt2 = entry_2["amount"]
+                    id2 = entry_2["id"]
+
+                    res2, prof2, _, _ = await asyncio.to_thread(self.iq.check_result, id2)
+                    if res2 not in ("WIN", "LOSS", "EQUAL"):
+                        diff2 = close_price - p2
+                        if abs(diff2) < 1e-6:
+                            res2 = "EQUAL"
+                            prof2 = 0.0
+                        elif trade_dir in ("CALL", "COMPRA"):
+                            res2 = "WIN" if diff2 > 0 else "LOSS"
+                            prof2 = round(amt2 * 0.85, 2) if diff2 > 0 else round(-amt2, 2)
+                        else:
+                            res2 = "WIN" if diff2 < 0 else "LOSS"
+                            prof2 = round(amt2 * 0.85, 2) if diff2 < 0 else round(-amt2, 2)
+                    else:
+                        if res2 == "WIN" and prof2 <= 0:
+                            prof2 = round(amt2 * 0.85, 2)
+                        elif res2 == "LOSS" and prof2 >= 0:
+                            prof2 = round(-amt2, 2)
+                        elif res2 == "EQUAL":
+                            prof2 = 0.0
+
+                    entry_2["result"] = res2
+                    entry_2["profit"] = prof2
+
+                    # Guardar en DB Entrada 2
+                    t2_record = {
+                        "id": id2,
+                        "pair": pair,
+                        "direction": trade_dir,
+                        "result": res2,
+                        "profit": round(prof2, 2),
+                        "entry_time": entry_2["time"],
+                        "close_time": close_time_str,
+                        "entry_price": p2,
+                        "close_price": close_price,
+                        "amount": amt2,
+                        "martingale_step": 0
+                    }
+                    self.db.save_trade(t2_record)
+                    self.trade_history.append(t2_record)
+
+                    total_profit = round(prof1 + prof2, 2)
+
+                    # Actualizar estadísticas de sesión para ambas entradas
+                    for r, p_val in [(res1, prof1), (res2, prof2)]:
+                        if r == "WIN":
+                            self.session_stats["wins"] += 1
+                        elif r == "LOSS":
+                            self.session_stats["losses"] += 1
+                        else:
+                            self.session_stats["equals"] += 1
+                        self.session_stats["net_profit"] += p_val
+                        self.session_stats["total_trades"] += 1
+
+                    if res1 == "WIN" and res2 == "WIN":
+                        combined_label = "2/2 ITM (Doble Ganancia)"
+                        combined_status = "WIN"
+                    elif res1 == "LOSS" and res2 == "LOSS":
+                        combined_label = "0/2 ITM (2 OTM)"
+                        combined_status = "LOSS"
+                    elif (res1 == "WIN" and res2 == "LOSS") or (res1 == "LOSS" and res2 == "WIN"):
+                        combined_label = "1 ITM / 1 OTM (Protección en Retroceso)"
+                        combined_status = "PARTIAL"
+                    else:
+                        combined_label = "EMPATE / DOJI"
+                        combined_status = "EQUAL"
                 else:
-                    self.session_stats["equals"] += 1
+                    total_profit = round(prof1, 2)
+                    if res1 == "WIN":
+                        self.session_stats["wins"] += 1
+                        combined_label = "1/1 ITM (Apertura)"
+                        combined_status = "WIN"
+                    elif res1 == "LOSS":
+                        self.session_stats["losses"] += 1
+                        combined_label = "0/1 ITM (Apertura)"
+                        combined_status = "LOSS"
+                    else:
+                        self.session_stats["equals"] += 1
+                        combined_label = "EMPATE / DOJI"
+                        combined_status = "EQUAL"
+                    self.session_stats["net_profit"] += prof1
+                    self.session_stats["total_trades"] += 1
 
-                self.current_amount = self.base_amount
-                self.current_martingale_step = 0
-
-                self.session_stats["total_trades"] += 1
                 tot = self.session_stats["wins"] + self.session_stats["losses"]
                 if tot > 0:
                     self.session_stats["winrate"] = round((self.session_stats["wins"] / tot) * 100, 1)
 
-                trade_record = {
-                    "id": order_id,
-                    "pair": pair,
-                    "direction": trade_dir,
-                    "result": result,
-                    "profit": round(profit, 2),
-                    "entry_time": cur_trade["entry_time"],
-                    "close_time": close_time_str,
-                    "entry_price": entry_price,
-                    "close_price": close_price,
-                    "amount": trade_amount,
-                    "martingale_step": 0
-                }
-                self.trade_history.append(trade_record)
-                self.db.save_trade(trade_record)
+                self.current_amount = self.base_amount
+                self.current_martingale_step = 0
 
                 sig_event = {
-                    "id": order_id,
+                    "id": int(time.time()),
                     "time": close_time_str,
                     "pair": pair,
                     "direction": trade_dir,
-                    "type": "RESULTADO",
-                    "status": result,
-                    "profit": round(profit, 2),
-                    "entry_time": cur_trade["entry_time"],
+                    "type": "RESULTADO_DUAL",
+                    "status": combined_label,
+                    "combined_status": combined_status,
+                    "profit": total_profit,
+                    "entry_time": entry_1["time"],
                     "close_time": close_time_str,
                     "expire_time": close_time_str,
-                    "entry_price": entry_price,
+                    "entry_price": p1,
                     "close_price": close_price,
+                    "entry_1": entry_1,
+                    "entry_2": entry_2,
                     "fibo_50": cur_trade.get("fibo_50"),
                     "fibo_618": cur_trade.get("fibo_618"),
-                    "tip": f"Operación finalizada: {result} (${profit:+.2f})"
+                    "tip": f"Resultado: {combined_label} ({'+' if total_profit >= 0 else ''}${total_profit:.2f})"
                 }
                 self.last_signal_event = sig_event
                 self.live_signals_feed.append(sig_event)
                 self.live_signals_feed = self.live_signals_feed[-10:]
 
-                self.telegram.notify_result(
+                # Enviar Notificación Dual a Telegram
+                self.telegram.notify_dual_result(
                     pair=pair,
                     direction=trade_dir,
-                    result=result,
-                    entry_time=cur_trade["entry_time"],
                     close_time=close_time_str,
-                    entry_price=entry_price,
                     close_price=close_price,
-                    profit=profit,
+                    entry_1=entry_1,
+                    entry_2=entry_2,
                     stats=self.session_stats
                 )
 
-                logger.info(f"Operación finalizada {pair}: {result} (${profit:.2f}). Saldo neto: ${self.session_stats['net_profit']:.2f}")
+                logger.info(f"Operación finalizada {pair}: {combined_label} (${total_profit:.2f}). Saldo neto: ${self.session_stats['net_profit']:.2f}")
 
                 # ¡SOLO AHORA SE DESBLOQUEA Y SE VUELVE A ANALIZAR TODOS LOS PARES!
                 self.engine_mode = "SEARCHING"
                 self.locked_pair = None
                 self.pending_signal = None
                 self.current_trade = None
-                self.current_status_message = f"Operación finalizada ({result}). Reanudando análisis simultáneo de todos los pares en M5..."
+                self.current_status_message = f"Operación finalizada ({combined_label}). Reanudando escaneo simultáneo en M5..."
 
     def update_config(self, pairs: List[str], timeframe: int, amount: float, martingale: int, account_type: str):
         if pairs:

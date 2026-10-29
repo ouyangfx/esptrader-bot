@@ -506,6 +506,84 @@
       transition: width 1s linear;
     }
 
+    /* CUADRO 2 ENTRADAS POR SEÑAL */
+    .dual-entries-card {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .dual-entry-row {
+      background: var(--bg-box);
+      border: 1px solid var(--border-dark);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .dual-entry-badge {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .e1-row .dual-entry-badge { color: var(--iq-cyan); }
+    .e2-row .dual-entry-badge { color: var(--iq-gold); }
+    .dual-entry-details {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .de-price {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .de-status {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 50px;
+    }
+    .status-executed {
+      background: rgba(0, 230, 118, 0.15);
+      color: var(--iq-green);
+      border: 1px solid rgba(0, 230, 118, 0.3);
+    }
+    .status-waiting {
+      background: rgba(255, 215, 0, 0.15);
+      color: var(--iq-gold);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+    }
+    .status-skipped {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+    .status-win {
+      background: rgba(0, 230, 118, 0.2);
+      color: var(--iq-green);
+      border: 1px solid var(--iq-green);
+    }
+    .status-loss {
+      background: rgba(255, 61, 96, 0.2);
+      color: var(--iq-red);
+      border: 1px solid var(--iq-red);
+    }
+    .de-desc {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
     /* ZONA DE COMPRAS / VENTAS BOX */
     .fibo-sniper-box {
       background: var(--bg-box);
@@ -1053,6 +1131,7 @@
     }
 
     @media (max-width: 768px) {
+      .dual-entries-card { grid-template-columns: 1fr; }
       .tips-grid { grid-template-columns: 1fr; }
       .signals-navbar { flex-direction: column; align-items: flex-start; }
       .nav-actions { width: 100%; justify-content: flex-start; }
@@ -1186,6 +1265,26 @@
             <span class="cd-number" id="sig-countdown">00s</span>
             <div class="cd-bar-wrap">
               <div class="cd-bar-fill" id="sig-progress" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CUADRO DE 2 ENTRADAS POR SEÑAL (APERTURA + RETROCESO) -->
+        <div class="dual-entries-card" id="dual-entries-card">
+          <div class="dual-entry-row e1-row">
+            <div class="dual-entry-badge"><i class="fa-solid fa-circle-dot"></i> Entrada 1 (Apertura Vela M5)</div>
+            <div class="dual-entry-details">
+              <span class="de-status status-executed" id="e1-status-tag">✅ Ejecutada</span>
+              <span class="de-price" id="e1-price-val">0.00000</span>
+              <span class="de-desc">Entrada automática al segundo :00</span>
+            </div>
+          </div>
+          <div class="dual-entry-row e2-row">
+            <div class="dual-entry-badge"><i class="fa-solid fa-arrows-rotate"></i> Entrada 2 (Retroceso en Zona)</div>
+            <div class="dual-entry-details">
+              <span class="de-status status-waiting" id="e2-status-tag">⏳ Esperando Zona</span>
+              <span class="de-price" id="e2-price-val">--</span>
+              <span class="de-desc" id="e2-desc">Esperando que la vela retroceda a la zona</span>
             </div>
           </div>
         </div>
@@ -1874,6 +1973,84 @@
           sigFibo50.textContent = p1;
           sigFibo618.textContent = p2;
 
+          // Actualización de Entrada 1 y Entrada 2
+          const e1Tag = document.getElementById('e1-status-tag');
+          const e1Val = document.getElementById('e1-price-val');
+          const e2Tag = document.getElementById('e2-status-tag');
+          const e2Val = document.getElementById('e2-price-val');
+          const e2Desc = document.getElementById('e2-desc');
+
+          const e1 = activeEvent.entry_1;
+          const e2 = activeEvent.entry_2;
+
+          if (e1 && e1.price) {
+            if (e1Val) e1Val.textContent = parseFloat(e1.price).toFixed(dec);
+            if (e1Tag) {
+              if (e1.result === 'WIN') {
+                e1Tag.className = 'de-status status-win';
+                e1Tag.textContent = `✅ ITM (+${parseFloat(e1.profit || 0).toFixed(2)}$)`;
+              } else if (e1.result === 'LOSS') {
+                e1Tag.className = 'de-status status-loss';
+                e1Tag.textContent = `❌ OTM (${parseFloat(e1.profit || 0).toFixed(2)}$)`;
+              } else if (e1.result === 'EQUAL') {
+                e1Tag.className = 'de-status status-skipped';
+                e1Tag.textContent = '⚪ DOJI ($0.00)';
+              } else {
+                e1Tag.className = 'de-status status-executed';
+                e1Tag.textContent = '✅ Ejecutada (En curso)';
+              }
+            }
+          } else if (activeEvent.entry_price) {
+            if (e1Val) e1Val.textContent = parseFloat(activeEvent.entry_price).toFixed(dec);
+            if (e1Tag) {
+              e1Tag.className = 'de-status status-executed';
+              e1Tag.textContent = '✅ Ejecutada';
+            }
+          }
+
+          if (e2 && e2.price) {
+            if (e2Val) e2Val.textContent = parseFloat(e2.price).toFixed(dec);
+            if (e2Tag) {
+              if (e2.result === 'WIN') {
+                e2Tag.className = 'de-status status-win';
+                e2Tag.textContent = `✅ ITM (+${parseFloat(e2.profit || 0).toFixed(2)}$)`;
+              } else if (e2.result === 'LOSS') {
+                e2Tag.className = 'de-status status-loss';
+                e2Tag.textContent = `❌ OTM (${parseFloat(e2.profit || 0).toFixed(2)}$)`;
+              } else if (e2.result === 'EQUAL') {
+                e2Tag.className = 'de-status status-skipped';
+                e2Tag.textContent = '⚪ DOJI ($0.00)';
+              } else {
+                e2Tag.className = 'de-status status-executed';
+                e2Tag.textContent = '✅ Ejecutada en Retroceso';
+              }
+            }
+            if (e2Desc) e2Desc.textContent = `Disparada en ${e2.time || 'retroceso'}`;
+          } else {
+            if (activeEvent.type === 'RESULTADO_DUAL' || activeEvent.type === 'RESULTADO') {
+              if (e2Val) e2Val.textContent = '--';
+              if (e2Tag) {
+                e2Tag.className = 'de-status status-skipped';
+                e2Tag.textContent = '⚪ No activada';
+              }
+              if (e2Desc) e2Desc.textContent = 'Sin retroceso en la ventana operativa';
+            } else if (activeEvent.pullback_waiting || (data.current_trade && data.current_trade.pullback_waiting)) {
+              if (e2Val) e2Val.textContent = 'En espera';
+              if (e2Tag) {
+                e2Tag.className = 'de-status status-waiting';
+                e2Tag.textContent = '⏳ Esperando Zona';
+              }
+              if (e2Desc) e2Desc.textContent = `Al retroceder entre ${p1} y ${p2}`;
+            } else {
+              if (e2Val) e2Val.textContent = '--';
+              if (e2Tag) {
+                e2Tag.className = 'de-status status-skipped';
+                e2Tag.textContent = '⚪ No activada';
+              }
+              if (e2Desc) e2Desc.textContent = 'Tiempo de retroceso agotado';
+            }
+          }
+
           const sigKey = `${pair}_${dir}_${activeEvent.time || activeEvent.entry_time}`;
           if ((eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK' || eventCategory === 'IN_TRADE') && sigKey !== lastPlayedSignalKey) {
             playAlertChime();
@@ -1882,7 +2059,16 @@
 
           const zoneWord = isCall ? 'ZONA DE COMPRAS' : 'ZONA DE VENTAS';
 
-          if (eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK') {
+          if (activeEvent.type === 'RESULTADO_DUAL') {
+            const pSign = (activeEvent.profit >= 0 ? '+' : '');
+            statusTitleTextEl.textContent = `🏁 RESULTADO: ${activeEvent.status} (${pSign}$${parseFloat(activeEvent.profit || 0).toFixed(2)})`;
+            statusTagEl.textContent = activeEvent.status;
+            statusTagEl.className = activeEvent.combined_status === 'WIN' ? 'status-tag-main status-in-trade' : (activeEvent.combined_status === 'LOSS' ? 'status-tag-main status-searching' : 'status-tag-main status-confirming');
+            sigEventTypeBadge.className = 'badge-event-type ' + (activeEvent.combined_status === 'WIN' ? 'status-in-trade' : (activeEvent.combined_status === 'LOSS' ? 'status-searching' : 'status-confirming'));
+            sigEventTypeBadge.innerHTML = `<i class="fa-solid fa-flag-checkered"></i> ${activeEvent.status}`;
+            cdTitle.textContent = 'FINALIZADA';
+            radarSearchingStrip.style.display = 'flex';
+          } else if (eventCategory === 'CONFIRMING' || eventCategory === 'WAITING_PULLBACK') {
             statusTitleTextEl.textContent = `🎯 ¡SEÑAL CONFIRMADA EN ${pair}! ESPERANDO ENTRADA EN ${zoneWord}`;
             statusTagEl.textContent = 'ESPERANDO ZONA';
             statusTagEl.className = 'status-tag-main status-confirming';
@@ -1891,10 +2077,14 @@
             cdTitle.textContent = 'VENTANA ENTRADA';
             radarSearchingStrip.style.display = 'none';
           } else if (eventCategory === 'IN_TRADE') {
-            statusTitleTextEl.textContent = `OPERACIÓN ACTIVA (5M) EN ${pair}`;
+            const e2Waiting = activeEvent.pullback_waiting || (data.current_trade && data.current_trade.pullback_waiting);
+            const e2Executed = activeEvent.entry_2 !== null && activeEvent.entry_2 !== undefined;
+            const subtitle = e2Executed ? '2 ENTRADAS ACTIVAS' : (e2Waiting ? 'E1 ACTIVA + ESPERANDO E2 RETROCESO' : 'E1 ACTIVA (SIN RETROCESO)');
+            statusTitleTextEl.textContent = `🎯 OPERACIÓN EN ${pair}: ${subtitle}`;
             statusTagEl.className = 'status-tag-main status-in-trade';
+            statusTagEl.textContent = e2Executed ? '2 ENTRADAS EN VIVO' : 'E1 EN VIVO';
             sigEventTypeBadge.className = 'badge-event-type status-in-trade';
-            sigEventTypeBadge.innerHTML = '<i class="fa-solid fa-fire"></i> OPERACIÓN 5M EN CURSO';
+            sigEventTypeBadge.innerHTML = `<i class="fa-solid fa-fire"></i> ${subtitle}`;
             cdTitle.textContent = 'EXPIRACIÓN 5M EN';
             radarSearchingStrip.style.display = 'none';
           } else {

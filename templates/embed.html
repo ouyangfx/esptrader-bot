@@ -146,6 +146,24 @@
     }
     .fibo-box span { font-weight: 800; color: var(--iq-cyan); }
 
+    .sig-entries-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .entry-pill {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #0e1626;
+      border: 1px solid var(--border-color);
+      color: #94a3b8;
+    }
+    .entry-pill-e1 { border-color: rgba(0, 210, 255, 0.4); color: var(--iq-cyan); }
+    .entry-pill-e2 { border-color: rgba(255, 215, 0, 0.4); color: var(--iq-gold); }
+
     /* PAIR SELECTOR PILLS */
     .pairs-bar {
       display: flex;
@@ -268,6 +286,11 @@
       <div class="sig-fibo-levels">
         <div class="fibo-box">Límite 1: <span id="sig-f50">--</span></div>
         <div class="fibo-box">Límite 2: <span id="sig-f618">--</span></div>
+      </div>
+
+      <div class="sig-entries-row">
+        <span class="entry-pill entry-pill-e1" id="embed-e1">E1 Apertura: --</span>
+        <span class="entry-pill entry-pill-e2" id="embed-e2">E2 Retroceso: --</span>
       </div>
     </div>
 
@@ -540,6 +563,30 @@
 
         f50.textContent = ev.fibo_50 ? parseFloat(ev.fibo_50).toFixed(dec) : '--';
         f618.textContent = ev.fibo_618 ? parseFloat(ev.fibo_618).toFixed(dec) : '--';
+
+        // Desglose de las 2 entradas en el widget
+        const em1 = document.getElementById('embed-e1');
+        const em2 = document.getElementById('embed-e2');
+        if (em1) {
+          if (ev.entry_1 && ev.entry_1.price) {
+            const r1 = ev.entry_1.result ? ` (${ev.entry_1.result})` : '';
+            em1.textContent = `1️⃣ E1 Apertura: ${parseFloat(ev.entry_1.price).toFixed(dec)}${r1}`;
+          } else if (ev.entry_price) {
+            em1.textContent = `1️⃣ E1 Apertura: ${parseFloat(ev.entry_price).toFixed(dec)}`;
+          }
+        }
+        if (em2) {
+          if (ev.entry_2 && ev.entry_2.price) {
+            const r2 = ev.entry_2.result ? ` (${ev.entry_2.result})` : '';
+            em2.textContent = `2️⃣ E2 Retroceso: ${parseFloat(ev.entry_2.price).toFixed(dec)}${r2}`;
+          } else if (ev.type === 'RESULTADO_DUAL' || ev.type === 'RESULTADO') {
+            em2.textContent = '2️⃣ E2 Retroceso: No activada';
+          } else if (ev.pullback_waiting || (data.current_trade && data.current_trade.pullback_waiting)) {
+            em2.textContent = '2️⃣ E2 Retroceso: Esperando Zona';
+          } else {
+            em2.textContent = '2️⃣ E2 Retroceso: --';
+          }
+        }
 
         if (pair !== currentChartPair && (mode === 'WAITING_PULLBACK' || mode === 'IN_TRADE')) {
           switchChartPair(pair);

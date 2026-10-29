@@ -138,9 +138,9 @@ async def api_signals_live(request: Request):
     }
 
 @router.get("/api/candles")
-async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe: int = 300, count: int = 80):
+async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe: int = 300, count: int = 150):
     """
-    Retorna el historial de velas M5 y los marcadores de señales calculados para TradingView Lightweight Charts
+    Retorna el historial de velas M5 actualizadas del último día y los marcadores de señales calculados para TradingView Lightweight Charts
     """
     engine = request.app.state.engine
     candles = await asyncio.to_thread(engine.iq.get_candles, pair, timeframe, count)
@@ -151,9 +151,14 @@ async def api_get_candles(request: Request, pair: str = "EURUSD-OTC", timeframe:
     markers = []
     indicator = engine.indicator
 
+    seen_times = set()
     for i in range(len(candles)):
         c = candles[i]
         c_time = int(c.get('from', 0))
+        if c_time in seen_times:
+            continue
+        seen_times.add(c_time)
+
         formatted_candles.append({
             "time": c_time,
             "open": float(c['open']),

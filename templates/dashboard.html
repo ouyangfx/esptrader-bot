@@ -398,6 +398,41 @@
       </section>
     </div>
 
+    <!-- WIDGET DE INCRUSTACIÓN PARA CUALQUIER SITIO WEB O PHP (SOLO ÁREA ADMIN) -->
+    <section class="card glow-panel embed-card" style="margin-bottom: 24px;">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+        <div class="header-title" style="display: flex; align-items: center; gap: 10px;">
+          <i class="fa-solid fa-code" style="color: #00d2ff;"></i>
+          <h3>Código para Incrustar Señales & Gráfico M5 en Cualquier Página PHP</h3>
+        </div>
+        <span class="badge-vip" style="background: rgba(0, 210, 255, 0.15); color: #00d2ff; border: 1px solid rgba(0, 210, 255, 0.3); padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
+          <i class="fa-solid fa-lock"></i> Exclusivo Área de Admin
+        </span>
+      </div>
+
+      <div class="card-body" style="padding: 16px 20px;">
+        <p style="color: #cbd5e1; font-size: 0.88rem; margin-bottom: 14px; line-height: 1.5;">
+          Usa este código para incrustar la pantalla de señales en vivo y el gráfico M5 en cualquier página web externa, sitio PHP, cPanel o plantilla WordPress:
+        </p>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <button type="button" id="admin-tab-php" onclick="switchAdminSnippet('php')" style="background: #00d2ff; color: #06090f; font-weight: 700; font-size: 0.8rem; padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer;">Código PHP</button>
+          <button type="button" id="admin-tab-html" onclick="switchAdminSnippet('html')" style="background: rgba(255,255,255,0.08); color: #cbd5e1; font-weight: 600; font-size: 0.8rem; padding: 6px 14px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; cursor: pointer;">Código HTML / Iframe</button>
+        </div>
+
+        <div style="position: relative; background: #070a12; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+          <button type="button" onclick="copyAdminEmbedCode()" style="position: absolute; top: 10px; right: 10px; background: rgba(0, 245, 155, 0.2); border: 1px solid #00f59b; color: #00f59b; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 0.78rem; cursor: pointer;">
+            <i class="fa-solid fa-copy"></i> <span id="admin-copy-txt">Copiar Código</span>
+          </button>
+          <pre id="admin-embed-code-display" style="color: #38bdf8; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; margin: 0; line-height: 1.5;"></pre>
+        </div>
+
+        <div style="font-size: 0.78rem; color: #94a3b8; line-height: 1.5;">
+          <strong>Instrucciones:</strong> Pega el bloque de código en cualquier archivo <code>.php</code> o template de tu sitio web. El widget se adapta al 100% del ancho del contenedor y sincroniza las señales automáticamente.
+        </div>
+      </div>
+    </section>
+
     <!-- CONSOLE LOG TERMINAL -->
     <section class="card terminal-card glow-panel">
       <div class="card-header">
@@ -415,5 +450,71 @@
   </div>
 
   <script src="/static/js/dashboard.js"></script>
+  <script>
+    const adminPhpSnippet = `<?php
+/**
+ * ==============================================================
+ * Trading SNR - Widget de Señales y Gráfico en Vivo (M5)
+ * ==============================================================
+ * Compatible con cualquier script PHP, WordPress o cPanel.
+ */
+?>
+<div class="tradingsnr-widget-container" style="width: 100%; max-width: 1200px; margin: 0 auto; min-height: 720px; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.06); border-radius: 16px; overflow: hidden; background: #0e1626;">
+    <iframe 
+        src="https://analisis.tradingsnr.info/embed" 
+        style="width: 100%; height: 760px; border: 0; display: block;" 
+        title="Trading SNR - Señales y Gráfico M5 en Vivo"
+        allow="autoplay; encrypted-media"
+        loading="lazy">
+    </iframe>
+</div>`;
+
+    const adminHtmlSnippet = `<!-- Trading SNR: Widget de Señales y Gráfico M5 en Vivo -->
+<div style="width: 100%; max-width: 1200px; margin: 0 auto; min-height: 720px; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.06); border-radius: 16px; overflow: hidden; background: #0e1626;">
+  <iframe 
+    src="https://analisis.tradingsnr.info/embed" 
+    style="width: 100%; height: 760px; border: 0; display: block;" 
+    title="Trading SNR - Señales y Gráfico M5 en Vivo"
+    allow="autoplay; encrypted-media"
+    loading="lazy">
+  </iframe>
+</div>`;
+
+    let activeAdminSnippetType = 'php';
+
+    function switchAdminSnippet(type) {
+      activeAdminSnippetType = type;
+      const display = document.getElementById('admin-embed-code-display');
+      const tabPhp = document.getElementById('admin-tab-php');
+      const tabHtml = document.getElementById('admin-tab-html');
+
+      if (type === 'php') {
+        tabPhp.style.background = '#00d2ff';
+        tabPhp.style.color = '#06090f';
+        tabHtml.style.background = 'rgba(255,255,255,0.08)';
+        tabHtml.style.color = '#cbd5e1';
+        display.textContent = adminPhpSnippet;
+      } else {
+        tabHtml.style.background = '#00d2ff';
+        tabHtml.style.color = '#06090f';
+        tabPhp.style.background = 'rgba(255,255,255,0.08)';
+        tabPhp.style.color = '#cbd5e1';
+        display.textContent = adminHtmlSnippet;
+      }
+    }
+
+    function copyAdminEmbedCode() {
+      const code = activeAdminSnippetType === 'php' ? adminPhpSnippet : adminHtmlSnippet;
+      navigator.clipboard.writeText(code).then(() => {
+        const txt = document.getElementById('admin-copy-txt');
+        txt.textContent = '¡Copiado!';
+        setTimeout(() => { txt.textContent = 'Copiar Código'; }, 2000);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      switchAdminSnippet('php');
+    });
+  </script>
 </body>
 </html>

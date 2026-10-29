@@ -204,33 +204,40 @@ class IQOptionClient:
         except Exception:
             return int(time.time())
 
-    def get_candles(self, active: str, timeframe: int, count: int = 60) -> List[Dict]:
+    def get_candles(self, active: str, timeframe: int, count: int = 150) -> List[Dict]:
         """
         active: 'EURUSD', 'GBPUSD', etc.
         timeframe: segundos (60 para 1m, 300 para 5m)
-        count: número de velas a traer
+        count: número de velas a traer (cubre hasta 24 horas del último día)
         """
         if self.is_simulation or not self.api:
             return self._generate_simulated_candles(active, timeframe, count)
 
         try:
-            # iqoptionapi get_candles
-            candles = self.api.get_candles(active, timeframe, count, time.time())
+            # iqoptionapi get_candles con timestamp actual para obtener el último día en tiempo real
+            candles = self.api.get_candles(active, timeframe, count, int(time.time()))
             if candles and isinstance(candles, list):
-                # Asegurar formato estándar
+                # Asegurar formato estándar, orden cronológico y sin duplicados
                 std_candles = []
                 for c in candles:
                     std_candles.append({
                         'id': c.get('id', 0),
-                        'from': c.get('from', 0),
-                        'to': c.get('to', 0),
+                        'from': int(c.get('from', 0)),
+                        'to': int(c.get('to', 0)),
                         'open': float(c.get('open', 0)),
                         'close': float(c.get('close', 0)),
                         'min': float(c.get('min', c.get('low', 0))),
                         'max': float(c.get('max', c.get('high', 0))),
                         'volume': float(c.get('volume', 0))
                     })
-                return std_candles
+                std_candles.sort(key=lambda x: x['from'])
+                unique_candles = []
+                seen_from = set()
+                for c in std_candles:
+                    if c['from'] not in seen_from:
+                        seen_from.add(c['from'])
+                        unique_candles.append(c)
+                return unique_candles
             else:
                 return self._generate_simulated_candles(active, timeframe, count)
         except Exception as e:

@@ -15,6 +15,7 @@ import time
 import asyncio
 import logging
 from datetime import datetime
+from collections import deque
 from typing import Dict, List, Optional, Any, Tuple
 from core.indicator import ScriptVipIndicator
 from core.iq_client import IQOptionClient
@@ -380,8 +381,42 @@ class TradingEngine:
                 dead_clients.add(ws)
         self.websocket_listeners.difference_update(dead_clients)
 
+    def calcular_fuerza_rechazo_ticks(self, pair: str, direction: str) -> Tuple[bool, float, str]:
+        """Calcula la fuerza cuantitativa del flujo de ticks (Micro-Momentum & Absorción)."""
+        p_state = self.pairs_state.get(pair, {})
+        recent = p_state.get("recent_ticks")
+        if not recent or len(recent) < 4:
+            return True, 0.50, "Flujo de ticks equilibrado"
+
+        prices = [item[1] for item in list(recent)[-20:]]
+        subidas = 0
+        bajadas = 0
+        for i in range(1, len(prices)):
+            diff = prices[i] - prices[i - 1]
+            if diff > 0:
+                subidas += 1
+            elif diff < 0:
+                bajadas += 1
+
+        total = subidas + bajadas
+        if total == 0:
+            return True, 0.50, "Ticks estables"
+
+        if direction in ("CALL", "COMPRA"):
+            ratio_favor = subidas / total
+            # Al menos 45% de ticks impulsando al alza para validar absorción de compra
+            es_favorable = ratio_favor >= 0.45
+            detalle = f"Presión compradora {ratio_favor*100:.0f}% ({subidas}↑ / {bajadas}↓)"
+        else:
+            ratio_favor = bajadas / total
+            # Al menos 45% de ticks empujando a la baja para validar rechazo de venta
+            es_favorable = ratio_favor >= 0.45
+            detalle = f"Presión vendedora {ratio_favor*100:.0f}% ({bajadas}↓ / {subidas}↑)"
+
+        return es_favorable, round(ratio_favor, 2), detalle
+
     async def _evaluar_pullback_tick(self, pair: str, current_price: float, server_ts: float):
-        """Evalúa si el precio en vivo toca la zona de retroceso Fibonacci (50% - 61.8%) en la vela M5."""
+        """Evalúa si el precio en vivo toca la zona de retroceso Fibonacci con fuerza a favor."""
         if not self.pending_signal or self.engine_mode not in ("CONFIRMING", "WAITING_PULLBACK"):
             return
 
@@ -391,7 +426,31 @@ class TradingEngine:
         pip_unit = 0.01 if "JPY" in pair else 0.0001
         tolerance = pip_unit * 1.0  # 1 pip de tolerancia
 
-        # Condición de retroceso hacia la zona Fibo
+        # 1. Filtro Anti-Cuchillo Cayendo: Si perfora violentamente más de 2.5 pips el 61.8%
+        if direction in ("CALL", "COMPRA") and current_price < (fibo_618 - (pip_unit * 2.5)):
+            logger.info(f"🚫 [FILTRO FUERZA] {pair} perforó el 61.8% ({fibo_618:.5f}). Fuerza en contra detectada. Cancelando señal.")
+            self.telegram.notify_pullback_cancelled(
+                pair=pair,
+                direction=direction,
+                reason=f"Fuerza en contra detectada: perforación del Fibo 61.8% ({fibo_618:.5f})."
+            )
+            self.engine_mode = "SEARCHING"
+            self.locked_pair = None
+            self.pending_signal = None
+            return
+        elif direction in ("PUT", "VENTA") and current_price > (fibo_618 + (pip_unit * 2.5)):
+            logger.info(f"🚫 [FILTRO FUERZA] {pair} perforó el 61.8% ({fibo_618:.5f}). Fuerza en contra detectada. Cancelando señal.")
+            self.telegram.notify_pullback_cancelled(
+                pair=pair,
+                direction=direction,
+                reason=f"Fuerza en contra detectada: perforación del Fibo 61.8% ({fibo_618:.5f})."
+            )
+            self.engine_mode = "SEARCHING"
+            self.locked_pair = None
+            self.pending_signal = None
+            return
+
+        # 2. Verificar si está en la zona de retroceso Fibonacci (50% a 61.8%)
         pullback_hit = False
         if direction in ("CALL", "COMPRA") and current_price <= (fibo_50 + tolerance):
             pullback_hit = True
@@ -399,6 +458,12 @@ class TradingEngine:
             pullback_hit = True
 
         if pullback_hit:
+            # 3. Verificación Cuantitativa de Fuerza en Ticks (Micro-momentum a favor)
+            fuerza_ok, ratio_fuerza, detalle_fuerza = self.calcular_fuerza_rechazo_ticks(pair, direction)
+            if not fuerza_ok:
+                # El precio llegó al nivel pero el micro-flujo sigue empujando en contra; esperar absorción
+                return
+
             trade_amount = self.current_amount
             remaining_sec = max(60, self.pending_signal["end_ts"] - server_ts)
             exp_min = max(1, min(5, int(round(remaining_sec / 60.0))))
@@ -408,8 +473,8 @@ class TradingEngine:
             expire_time_str = datetime.fromtimestamp(expire_ts).strftime("%H:%M:%S")
 
             logger.info(
-                f"🎯 ¡RETROCESO FIBONACCI ALCANZADO! {pair} {direction} @ {current_price:.5f} "
-                f"(Nivel 50%: {fibo_50:.5f}) - Ejecutando a {exp_min}m M5"
+                f"🎯 ¡RETROCESO FIBONACCI VALIDADO CON FUERZA! {pair} {direction} @ {current_price:.5f} "
+                f"({detalle_fuerza}) - Ejecutando a {exp_min}m M5"
             )
 
             # Prevenir ejecuciones múltiples simultáneas
@@ -432,7 +497,7 @@ class TradingEngine:
                     "start_ts": server_ts,
                     "end_ts": expire_ts
                 }
-                self.current_status_message = f"OPERACIÓN EN RETROCESO: {pair} {direction} ${trade_amount} (Exp: {expire_time_str})"
+                self.current_status_message = f"OPERACIÓN EN RETROCESO ({detalle_fuerza}): {pair} {direction} ${trade_amount} (Exp: {expire_time_str})"
 
                 sig_event = {
                     "id": order_id,
@@ -446,14 +511,14 @@ class TradingEngine:
                     "entry_price": current_price,
                     "fibo_50": fibo_50,
                     "fibo_618": fibo_618,
-                    "tip": f"Entrada ejecutada en retroceso Fibo 50% ({fibo_50:.5f})",
+                    "tip": f"Rechazo Fibo 50% confirmado con {detalle_fuerza}",
                     "amount": trade_amount
                 }
                 self.last_signal_event = sig_event
                 self.live_signals_feed.append(sig_event)
                 self.live_signals_feed = self.live_signals_feed[-10:]
 
-                # Notificar a Telegram
+                # Notificar a Telegram con métrica de fuerza
                 self.telegram.notify_pullback_entry(
                     pair=pair,
                     direction=direction,
@@ -461,7 +526,8 @@ class TradingEngine:
                     entry_price=current_price,
                     fibo_level=fibo_50,
                     expire_time=expire_time_str,
-                    amount=trade_amount
+                    amount=trade_amount,
+                    fuerza_detalle=detalle_fuerza
                 )
 
                 # Notificar a Web vía WebSocket
@@ -472,6 +538,7 @@ class TradingEngine:
                 logger.warning(f"Error al enviar orden en retroceso a IQ Option ({pair}): {msg}")
                 self.engine_mode = "SEARCHING"
                 self.locked_pair = None
+                self.pending_signal = None
                 self.pending_signal = None
 
     async def _ejecutar_gatillo_sniper(self, gatillo: Dict[str, Any]):
@@ -583,9 +650,16 @@ class TradingEngine:
                             "tick_price": 0.0,
                             "last_analyzed_time": 0,
                             "status_msg": "Analizando...",
-                            "seconds_left": self.seconds_left_in_candle
+                            "seconds_left": self.seconds_left_in_candle,
+                            "recent_ticks": deque(maxlen=30)
                         })
-                        p_state["tick_price"] = self.iq.get_realtime_price(pair, self.timeframe)
+                        p = self.iq.get_realtime_price(pair, self.timeframe)
+                        if p > 0:
+                            p_state["tick_price"] = p
+                            recent = p_state.setdefault("recent_ticks", deque(maxlen=30))
+                            if not recent or recent[-1][1] != p:
+                                recent.append((server_ts, p))
+
                         if pair == self.active_pair:
                             self.current_tick_price = p_state["tick_price"]
 

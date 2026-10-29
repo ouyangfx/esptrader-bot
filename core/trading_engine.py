@@ -673,7 +673,7 @@ class TradingEngine:
                     if self.seconds_left_in_candle == self.timeframe:
                         self.seconds_left_in_candle = 0
 
-                    if (now - last_tick_broadcast_time) >= 0.06:
+                    if (now - last_tick_broadcast_time) >= 0.04:
                         await self.broadcast_tick(now)
                         last_tick_broadcast_time = now
 

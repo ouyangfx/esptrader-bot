@@ -1326,13 +1326,19 @@
               const cmd = parts[0];
               const p = parts[1];
               if (cmd === 'PREALERTA') {
-                statusTitleTextEl.textContent = `⚡ ¡PRE-ALERTA RADAR (3 PIPS) EN ${p}! PREPARAR ${parts[2] || 'ORDEN'}`;
+                statusTitleTextEl.textContent = `⚡ ¡SEÑAL CONFIRMADA EN ${p}! ESPERANDO RETROCESO FIBO 50%`;
                 statusTagEl.className = 'status-tag-main status-confirming';
                 playPrealertChime();
+                if (p && p !== currentChartPair) {
+                  switchChartPair(p);
+                }
               } else if (cmd === 'VENTA' || cmd === 'COMPRA') {
-                statusTitleTextEl.textContent = `🎯 ¡GATILLO SNIPER 30s EN ${p}! ${cmd} (M5)`;
+                statusTitleTextEl.textContent = `🎯 ¡ORDEN EJECUTADA EN ${p}! ${cmd} (M5)`;
                 statusTagEl.className = 'status-tag-main status-in-trade';
                 playAlertChime();
+                if (p && p !== currentChartPair) {
+                  switchChartPair(p);
+                }
               }
             }
           } catch (e) {

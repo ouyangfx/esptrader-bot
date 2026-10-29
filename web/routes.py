@@ -104,6 +104,17 @@ async def signals_page(request: Request):
         context={"engine": engine}
     )
 
+@router.get("/embed", response_class=HTMLResponse)
+@router.get("/widget", response_class=HTMLResponse)
+async def embed_widget_page(request: Request):
+    """Widget incrustable en cualquier página web o archivo PHP."""
+    engine = request.app.state.engine
+    return templates.TemplateResponse(
+        request=request,
+        name="embed.html",
+        context={"engine": engine}
+    )
+
 @router.get("/portal", response_class=HTMLResponse)
 @router.get("/links", response_class=HTMLResponse)
 async def portal_page(request: Request):

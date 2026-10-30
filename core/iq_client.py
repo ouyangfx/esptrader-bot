@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 try:
     import iqoptionapi.global_value as iq_global
     import iqoptionapi.api as iq_api_mod
+    import iqoptionapi.stable_api as iq_stable
+    from iqoptionapi.constants import OP_code
     
     def safe_send_websocket_request(self, name, msg, request_id="", no_force_send=True):
         data = json.dumps(dict(name=name, msg=msg, request_id=request_id))
@@ -42,10 +44,69 @@ try:
         finally:
             iq_global.ssl_Mutual_exclusion_write = False
 
+    def safe_get_candles(self, ACTIVES, interval, count, endtime):
+        """Versión sin bloqueos ni 100% CPU de get_candles con timeout estricto de 3.5s."""
+        self.api.candles.candles_data = None
+        active_code = OP_code.ACTIVES.get(ACTIVES, ACTIVES)
+        start_wait = time.time()
+        while time.time() - start_wait < 3.5:
+            try:
+                self.api.getcandles(active_code, interval, count, endtime)
+                inner_wait = time.time()
+                while self.api.candles.candles_data is None:
+                    time.sleep(0.02)  # Ceder CPU siempre
+                    if time.time() - inner_wait > 1.5:
+                        break
+                if self.api.candles.candles_data is not None:
+                    return self.api.candles.candles_data
+            except Exception:
+                time.sleep(0.1)
+                break
+            time.sleep(0.05)
+        return self.api.candles.candles_data
+
+    def safe_buy(self, price, ACTIVES, ACTION, expirations):
+        """Versión sin busy-wait de buy con time.sleep(0.02) y timeout de 4.0s."""
+        self.api.buy_multi_option = {}
+        self.api.buy_successful = None
+        req_id = "buy"
+        try:
+            self.api.buy_multi_option[req_id]["id"] = None
+        except Exception:
+            pass
+        active_code = OP_code.ACTIVES.get(ACTIVES, ACTIVES)
+        try:
+            self.api.buyv3(price, active_code, ACTION, expirations, req_id)
+        except Exception as e:
+            return False, str(e)
+            
+        start_t = time.time()
+        order_id = None
+        self.api.result = None
+        while self.api.result is None or order_id is None:
+            time.sleep(0.02)  # Ceder CPU siempre
+            try:
+                if req_id in self.api.buy_multi_option and "message" in self.api.buy_multi_option[req_id]:
+                    return False, self.api.buy_multi_option[req_id]["message"]
+            except Exception:
+                pass
+            try:
+                if req_id in self.api.buy_multi_option:
+                    order_id = self.api.buy_multi_option[req_id].get("id")
+            except Exception:
+                pass
+            if time.time() - start_t >= 4.0:
+                logger.warning(f"Timeout esperando confirmación de compra para {ACTIVES}")
+                return False, "Timeout esperando respuesta del broker"
+
+        return self.api.result, order_id
+
     iq_api_mod.IQOptionAPI.send_websocket_request = safe_send_websocket_request
-    logger.info("Parche anti-deadlock aplicado a iqoptionapi con éxito.")
+    iq_stable.IQ_Option.get_candles = safe_get_candles
+    iq_stable.IQ_Option.buy = safe_buy
+    logger.info("Parches anti-deadlock (websocket, get_candles, buy) aplicados a iqoptionapi con éxito.")
 except Exception as e_patch:
-    logger.warning(f"No se pudo aplicar parche anti-deadlock a iqoptionapi: {e_patch}")
+    logger.warning(f"No se pudo aplicar parches anti-deadlock a iqoptionapi: {e_patch}")
 
 class IQOptionClient:
     def __init__(self, email: str = "", password: str = "", account_type: str = "PRACTICE"):
@@ -326,9 +387,9 @@ class IQOptionClient:
                     if c['from'] not in seen_from:
                         seen_from.add(c['from'])
                         unique_candles.append(c)
-                return unique_candles
-            else:
-                return self._generate_simulated_candles(active, timeframe, count)
+                if len(unique_candles) >= 5:
+                    return unique_candles
+            return self._generate_simulated_candles(active, timeframe, count)
         except Exception as e:
             logger.error(f"Error obteniendo velas de {active}: {e}")
             return self._generate_simulated_candles(active, timeframe, count)

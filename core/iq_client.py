@@ -22,7 +22,7 @@ try:
     import iqoptionapi.global_value as iq_global
     import iqoptionapi.api as iq_api_mod
     import iqoptionapi.stable_api as iq_stable
-    from iqoptionapi.constants import OP_code
+    import iqoptionapi.constants as OP_code
     
     def safe_send_websocket_request(self, name, msg, request_id="", no_force_send=True):
         data = json.dumps(dict(name=name, msg=msg, request_id=request_id))

@@ -6,12 +6,46 @@ Incluye modo simulación/fallback si no hay credenciales configuradas aún.
 """
 
 import time
+import json
 import logging
 import random
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Any
 
 logger = logging.getLogger(__name__)
+
+# =====================================================================
+# PARCHE DE SEGURIDAD CRÍTICO ANTI-DEADLOCK PARA IQOPTIONAPI
+# Previene bucles infinitos a 100% CPU si la conexión se interrumpe
+# =====================================================================
+try:
+    import iqoptionapi.global_value as iq_global
+    import iqoptionapi.api as iq_api_mod
+    
+    def safe_send_websocket_request(self, name, msg, request_id="", no_force_send=True):
+        data = json.dumps(dict(name=name, msg=msg, request_id=request_id))
+        start_wait = time.time()
+        while (iq_global.ssl_Mutual_exclusion or iq_global.ssl_Mutual_exclusion_write) and no_force_send:
+            time.sleep(0.01)  # Ceder CPU siempre
+            if time.time() - start_wait > 2.0:
+                # Romper bloqueo si la conexión o thread anterior murió
+                iq_global.ssl_Mutual_exclusion = False
+                iq_global.ssl_Mutual_exclusion_write = False
+                break
+
+        iq_global.ssl_Mutual_exclusion_write = True
+        try:
+            if hasattr(self, 'websocket') and self.websocket:
+                self.websocket.send(data)
+        except Exception:
+            pass
+        finally:
+            iq_global.ssl_Mutual_exclusion_write = False
+
+    iq_api_mod.IQOptionAPI.send_websocket_request = safe_send_websocket_request
+    logger.info("Parche anti-deadlock aplicado a iqoptionapi con éxito.")
+except Exception as e_patch:
+    logger.warning(f"No se pudo aplicar parche anti-deadlock a iqoptionapi: {e_patch}")
 
 class IQOptionClient:
     def __init__(self, email: str = "", password: str = "", account_type: str = "PRACTICE"):
@@ -22,6 +56,9 @@ class IQOptionClient:
         self.is_connected = False
         self.is_simulation = False
         self.mock_balance = 10000.0 if self.account_type == "PRACTICE" else 100.0
+        self.cached_balance = 0.0
+        self._last_balance_time = 0.0
+        self._last_reconnect_attempt = 0.0
         self.streaming_pairs = set()
         self.realtime_prices: Dict[str, float] = {}
 
@@ -186,15 +223,67 @@ class IQOptionClient:
         except Exception as e:
             logger.error(f"Error cambiando tipo de cuenta: {e}")
 
-    def get_balance(self) -> float:
+    def check_and_reconnect(self) -> bool:
+        """Verifica el estado del socket con IQ Option y reconecta de forma transparente si se cayó."""
+        if self.is_simulation or not self.api:
+            return True
+
+        now = time.time()
+        # Evitar reintentos excesivos seguidos (máximo 1 intento cada 15 segundos)
+        if (now - self._last_reconnect_attempt) < 15.0:
+            return self.is_connected
+
+        try:
+            is_active = False
+            if hasattr(self.api, "check_connect"):
+                is_active = self.api.check_connect()
+            elif hasattr(self.api, "websocket") and self.api.websocket:
+                is_active = getattr(self.api.websocket, "connected", False)
+
+            if not is_active:
+                self._last_reconnect_attempt = now
+                logger.warning("⚠️ Conexión perdida con IQ Option. Intentando reconexión automática en segundo plano...")
+                check, reason = self.api.connect()
+                if check:
+                    self.is_connected = True
+                    self.is_simulation = False
+                    self.change_balance(self.account_type)
+                    if self.streaming_pairs:
+                        for p in list(self.streaming_pairs):
+                            try:
+                                self.api.start_candles_stream(p, 300, 10)
+                            except Exception:
+                                pass
+                    logger.info("✅ Reconexión automática a IQ Option exitosa y streams restaurados.")
+                    return True
+                else:
+                    logger.warning(f"Reconexión a IQ Option falló ({reason}). Reintentará en el siguiente ciclo.")
+                    return False
+            return True
+        except Exception as e:
+            logger.error(f"Error verificando conexión IQ Option: {e}")
+            return False
+
+    def get_balance(self, force: bool = False) -> float:
         if self.is_simulation or not self.api:
             return float(self.mock_balance)
+
+        now = time.time()
+        # Cache de 15 segundos para no saturar el websocket cada segundo
+        if not force and self.cached_balance > 0 and (now - self._last_balance_time) < 15.0:
+            return self.cached_balance
+
         try:
+            self.check_and_reconnect()
             bal = self.api.get_balance()
-            return float(bal) if bal is not None else 0.0
+            if bal is not None and float(bal) >= 0:
+                self.cached_balance = float(bal)
+                self._last_balance_time = now
+                return self.cached_balance
+            return self.cached_balance if self.cached_balance > 0 else 0.0
         except Exception as e:
             logger.error(f"Error obteniendo balance: {e}")
-            return 0.0
+            return self.cached_balance if self.cached_balance > 0 else 0.0
 
     def get_server_timestamp(self) -> int:
         if self.is_simulation or not self.api:

@@ -613,6 +613,8 @@ class TradingEngine:
                     # Actualizar niveles M15 periódicamente (cada ~45 segundos)
                     if (current_int_sec - self.last_m15_scan_time) >= 45:
                         self.last_m15_scan_time = current_int_sec
+                        # Verificar y mantener viva la conexión con IQ Option en segundo plano
+                        await asyncio.to_thread(self.iq.check_and_reconnect)
                         for p_scan in self.selected_pairs:
                             m15_candles = await asyncio.to_thread(self.iq.get_candles, p_scan, 900, 25)
                             if m15_candles:
